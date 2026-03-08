@@ -6,7 +6,7 @@ st.set_page_config(page_title="Vishwajeet Classes Portal")
 
 # १. Google Sheet शी कनेक्शन जोडणे
 # 'spreadsheet' मध्ये तुमच्या शीटची पूर्ण लिंक टाका
-url = "तुमच्या_गूगल_शीटची_लिंक_येथे_टाका"
+url = "https://docs.google.com/spreadsheets/d/1IMw_nRER8fz-yUtgwKyt12Xmw4ZgwoSh4a19seAFzqc/edit?usp=sharingा"
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 def main():
@@ -55,3 +55,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
