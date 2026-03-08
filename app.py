@@ -1,58 +1,75 @@
 import streamlit as st
-from st_gsheets_connection import GSheetsConnection
+import pandas as pd
 
-# पेज सेटअप
-st.set_page_config(page_title="Vishwajeet Classes Portal")
+# १. पेज कॉन्फिगरेशन
+st.set_page_config(page_title="Vishwajeet Classes", layout="centered")
 
-# १. Google Sheet शी कनेक्शन जोडणे
-# 'spreadsheet' मध्ये तुमच्या शीटची पूर्ण लिंक टाका
-url = "https://docs.google.com/spreadsheets/d/1IMw_nRER8fz-yUtgwKyt12Xmw4ZgwoSh4a19seAFzqc/edit?usp=sharingा"
-conn = st.connection("gsheets", type=GSheetsConnection)
+# २. गुगल शीट कनेक्शन फंक्शन
+def load_data():
+    # तुमची शीटची लिंक येथे पेस्ट करा
+    sheet_url = "तुमची_पूर्ण_शीट_लिंक_येथे_टाका"
+    
+    # लिंकला CSV फॉरमॅटमध्ये रूपांतरित करणे
+    if "edit" in sheet_url:
+        csv_url = sheet_url.split('/edit')[0] + '/export?format=csv'
+    else:
+        csv_url = sheet_url
+        
+    try:
+        return pd.read_csv(csv_url)
+    except Exception as e:
+        st.error(f"शीट लोड करताना एरर आला: {e}")
+        return None
 
 def main():
-    # शीटमधील डेटा वाचणे
-    try:
-        df = conn.read(spreadsheet=url)
-        # डेटा डिक्शनरीमध्ये रूपांतरित करणे (Login साठी सोपे पडते)
-        # तुमच्या शीटमध्ये 'student_id' हा कॉलम असावा
-        data = df.set_index('student_id').to_dict('index')
-    except:
-        st.error("शीट कनेक्ट होऊ शकली नाही. लिंक चेक करा!")
-        return
-
-    st.sidebar.title("🔐 विद्यार्थी लॉगिन")
-    sid = st.sidebar.text_input("विद्यार्थी ID")
-    pwd = st.sidebar.text_input("पासवर्ड", type="password")
+    df = load_data()
     
-    if st.sidebar.button("Login"):
-        # पासवर्ड चेक करणे (शीटमधील 'password' कॉलमशी)
-        if sid in data and str(data[sid]["password"]) == pwd:
-            st.session_state["logged_in"] = True
-            st.session_state["student_info"] = data[sid]
-            st.session_state["student_name"] = data[sid]["name"]
-        else:
-            st.sidebar.error("ID किंवा पासवर्ड चुकीचा आहे!")
+    if df is not None:
+        # लॉगिनसाठी डेटा तयार करणे
+        # तुमच्या शीटमध्ये student_id, password, name हे कॉलम असावेत
+        data_dict = df.set_index('student_id').to_dict('index')
 
-    # लॉगिन झाल्यावर काय दिसेल
-    if st.session_state.get("logged_in"):
-        info = st.session_state["student_info"]
-        st.title(f"🚩 स्वागत आहे, {st.session_state['student_name']}!")
+        st.sidebar.title("🔐 विद्यार्थी लॉगिन")
+        sid = st.sidebar.text_input("विद्यार्थी ID (उदा. VC101)")
+        pwd = st.sidebar.text_input("पासवर्ड", type="password")
         
-        # शीटमधील इतर माहिती दाखवणे
-        col1, col2, col3 = st.columns(3)
-        col1.metric("लेव्हल", info['level'])
-        col2.metric("हजेरी", f"{info['attendance']}%")
-        col3.write(f"**फी स्टेटस:** {info['fees']}")
-        
-        st.info(f"**गुरुजींचा संदेश:** {info['progress_remark']}")
-        
-        if st.sidebar.button("Logout"):
-            st.session_state["logged_in"] = False
-            st.rerun()
-    else:
-        st.title("विश्वजीत क्लासेस - अधिकृत पोर्टल")
-        st.write("कृपया तुमच्या वैयक्तिक प्रगतीसाठी डावीकडून लॉगिन करा.")
+        if st.sidebar.button("Login"):
+            if sid in data_dict and str(data_dict[sid]["password"]) == str(pwd):
+                st.session_state["logged_in"] = True
+                st.session_state["info"] = data_dict[sid]
+            else:
+                st.sidebar.error("ID किंवा पासवर्ड चुकीचा आहे!")
+
+        # लॉगिन नंतरचे डॅशबोर्ड
+        if st.session_state.get("logged_in"):
+            info = st.session_state["info"]
+            st.title(f"🚩 स्वागत आहे, {info['name']}!")
+            
+            st.divider()
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                st.metric("चालू लेव्हल", info['level'])
+                st.metric("हजेरी", f"{info['attendance']}%")
+            with col2:
+                st.subheader("फी स्टेटस")
+                if info['fees'].lower() == "paid":
+                    st.success("Paid")
+                else:
+                    st.error("Pending")
+            
+            st.divider()
+            st.info(f"📝 **शिक्षकांचा अभिप्राय:** {info['progress_remark']}")
+            
+            if st.sidebar.button("Logout"):
+                st.session_state["logged_in"] = False
+                st.rerun()
+        else:
+            # पब्लिक होम पेज
+            st.title("विश्वजीत क्लासेस (Vishwajeet Classes)")
+            st.write("अ‍ॅबॅकस आणि वैदिक गणित केंद्र")
+            st.image("https://via.placeholder.com/700x300?text=Vishwajeet+Classes+Welcome", use_column_width=True)
+            st.write("तुमच्या मुलाची प्रगती पाहण्यासाठी डावीकडील मेन्यू मधून लॉगिन करा.")
 
 if __name__ == "__main__":
     main()
-
