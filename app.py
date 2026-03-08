@@ -1,13 +1,19 @@
+import os
+import subprocess
+import sys
+
+# लायब्ररी नसेल तर ती जबरदस्तीने इन्स्टॉल करणे
+try:
+    from st_gsheets_connection import GSheetsConnection
+except ImportError:
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "st-gsheets-connection"])
+    from st_gsheets_connection import GSheetsConnection
+
 import streamlit as st
 import pandas as pd
 from datetime import datetime
 
-# Connection लायब्ररी सुरक्षितपणे लोड करणे
-try:
-    from st_gsheets_connection import GSheetsConnection
-except ModuleNotFoundError:
-    st.error("अजून लायब्ररी लोड होत आहे... कृपया १-२ मिनिटांनी 'Reboot' करा.")
-    st.stop()
+# बाकी तुमचा जुना कोड इथून पुढे...
 
 # 1. Page Setup
 st.set_page_config(page_title="Vishwajeet Classes Dashboard", layout="wide")
@@ -127,4 +133,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
