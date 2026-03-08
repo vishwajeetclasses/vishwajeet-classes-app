@@ -9,8 +9,13 @@ st.set_page_config(page_title="Vishwajeet Classes Pro", layout="wide")
 
 # २. गुगल शीट कनेक्शन (gspread Method)
 def get_client():
-    # Streamlit Secrets मधून डेटा घेणे
-    creds_info = st.secrets["connections"]["gsheets"]
+    # १. आधी 'connections' की शोधण्याचा प्रयत्न करणे
+    if "connections" in st.secrets and "gsheets" in st.secrets["connections"]:
+        creds_info = st.secrets["connections"]["gsheets"]
+    # २. जर डायरेक्ट JSON पेस्ट केला असेल तर पूर्ण secrets वापरणे
+    else:
+        creds_info = dict(st.secrets)
+    
     scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
     creds = Credentials.from_service_account_info(creds_info, scopes=scopes)
     return gspread.authorize(creds)
@@ -98,3 +103,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
