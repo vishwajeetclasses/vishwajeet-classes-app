@@ -1,137 +1,100 @@
-import os
-import subprocess
-import sys
-
-# लायब्ररी नसेल तर ती जबरदस्तीने इन्स्टॉल करणे
-try:
-    from st_gsheets_connection import GSheetsConnection
-except ImportError:
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "st-gsheets-connection"])
-    from st_gsheets_connection import GSheetsConnection
-
 import streamlit as st
 import pandas as pd
+import gspread
+from google.oauth2.service_account import Credentials
 from datetime import datetime
 
-# बाकी तुमचा जुना कोड इथून पुढे...
+# १. पेज सेटअप
+st.set_page_config(page_title="Vishwajeet Classes Pro", layout="wide")
 
-# 1. Page Setup
-st.set_page_config(page_title="Vishwajeet Classes Dashboard", layout="wide")
+# २. गुगल शीट कनेक्शन (gspread Method)
+def get_client():
+    # Streamlit Secrets मधून डेटा घेणे
+    creds_info = st.secrets["connections"]["gsheets"]
+    scopes = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+    creds = Credentials.from_service_account_info(creds_info, scopes=scopes)
+    return gspread.authorize(creds)
 
-# Admin Password (tumcha avadta password ithe taka)
-ADMIN_PASSWORD = "VISHWA_ADMIN_123"
-
-# 2. Connection Setup (Secrets madhun automatically connect hoil)
-conn = st.connection("gsheets", type=GSheetsConnection)
-
-# Data Load karnyache function
-def get_all_data():
-    return conn.read(worksheet="Sheet1", ttl="0s") # ttl=0 mhanje nehami fresh data yeil
-
-def get_attendance_logs():
-    return conn.read(worksheet="attendance_logs", ttl="0s")
-
-def main():
-    df = get_all_data()
+def load_data():
+    client = get_client()
+    # तुमची शीट ID
+    sheet_id = "1IMw_nRER8fz-yUtgwKyt12Xmw4ZgwoSh4a19seAFzqc"
+    workbook = client.open_by_key(sheet_id)
+    
+    # Sheet1 (विद्यार्थी डेटा)
+    sheet1 = workbook.get_worksheet(0)
+    df = pd.DataFrame(sheet1.get_all_records())
     df.columns = [c.strip().lower() for c in df.columns]
     
-    # Sidebar Navigation
-    st.sidebar.title("🚩 Vishwajeet Classes")
-    choice = st.sidebar.selectbox("Vibhag Nivada", ["Student Login", "Admin Panel"])
+    return df, workbook
 
-    if choice == "Student Login":
-        st.header("🎓 Student Portal")
+def main():
+    try:
+        df, workbook = load_data()
+    except Exception as e:
+        st.error(f"शीटला कनेक्ट करता आले नाही: {e}")
+        return
+
+    st.sidebar.title("🚩 विश्वजीत क्लासेस")
+    choice = st.sidebar.selectbox("मेनू निवडा", ["विद्यार्थी लॉगिन", "Admin Panel"])
+
+    # --- विद्यार्थी लॉगिन विभाग ---
+    if choice == "विद्यार्थी लॉगिन":
+        st.header("🎓 विद्यार्थी पोर्टल")
         data_dict = df.set_index('student_id').to_dict('index')
         
-        if "student_logged_in" not in st.session_state:
-            st.session_state["student_logged_in"] = False
+        if "logged_in" not in st.session_state:
+            st.session_state["logged_in"] = False
 
-        if not st.session_state["student_logged_in"]:
-            sid = st.text_input("Vidyarthi ID")
-            pwd = st.text_input("Password", type="password")
-            if st.button("Login"):
+        if not st.session_state["logged_in"]:
+            sid = st.text_input("विद्यार्थी ID")
+            pwd = st.text_input("पासवर्ड", type="password")
+            if st.button("लॉगिन"):
                 if sid in data_dict and str(data_dict[sid]["password"]) == str(pwd):
-                    st.session_state["student_logged_in"] = True
-                    st.session_state["student_info"] = data_dict[sid]
-                    st.session_state["current_sid"] = sid
+                    st.session_state["logged_in"] = True
+                    st.session_state["info"] = data_dict[sid]
                     st.rerun()
                 else:
-                    st.error("ID kiwa Password chukicha ahe!")
+                    st.error("चुकीचा ID किंवा पासवर्ड!")
         else:
-            # --- Student Dashboard View ---
-            info = st.session_state["student_info"]
-            col1, col2 = st.columns([0.2, 0.8])
-            with col1:
-                st.image(info.get('photo_url', "https://via.placeholder.com/150"), width=150)
-            with col2:
-                st.title(f"Namaste, {info.get('name')}!")
-                st.write(f"📍 **Address:** {info.get('address', 'N/A')}")
+            info = st.session_state["info"]
+            st.title(f"नमस्ते, {info['name']}! 👋")
+            # फोटो दाखवणे
+            st.image(info.get('photo_url', "https://via.placeholder.com/150"), width=150)
             
-            st.divider()
-            c1, c2, c3 = st.columns(3)
-            c1.metric("Abacus Level", info.get('abacus_level', 'N/A'))
-            c2.metric("Vedic Math", info.get('vedic_level', 'N/A'))
+            col1, col2 = st.columns(2)
+            col1.metric("Abacus Level", info.get('abacus_level', 'N/A'))
+            col2.metric("Vedic Math", info.get('vedic_level', 'N/A'))
             
-            fee_status = str(info.get('fees')).capitalize()
-            color = "green" if fee_status == "Paid" else "red"
-            c3.markdown(f"**Fee Status:** :{color}[{fee_status}]")
-
-            st.write("---")
-            st.subheader("📅 Attendance Highlights")
-            st.info(f"Hajeri: {info.get('attendance_percent', 0)}% | Remark: {info.get('progress_remark', 'Pragati changli ahe.')}")
-
-            if st.sidebar.button("Logout"):
-                st.session_state["student_logged_in"] = False
+            if st.button("Logout"):
+                st.session_state["logged_in"] = False
                 st.rerun()
 
+    # --- ADMIN PANEL विभाग ---
     elif choice == "Admin Panel":
         st.header("🛠️ Admin Control Center")
         admin_pwd = st.sidebar.text_input("Admin Password", type="password")
-
-        if admin_pwd == ADMIN_PASSWORD:
-            tab1, tab2, tab3 = st.tabs(["Student Management", "Attendance Entry", "Fee Tracker"])
-
+        
+        if admin_pwd == "VISHWA_ADMIN_123":
+            tab1, tab2 = st.tabs(["हजेरी भरा", "विद्यार्थी यादी"])
+            
             with tab1:
-                st.subheader("Vidyarthi Mahiti Update Kara")
-                selected_name = st.selectbox("Vidyarthi Nivada", df['name'].tolist())
-                student_row = df[df['name'] == selected_name].iloc[0]
-                
-                with st.form("edit_form"):
-                    new_name = st.text_input("Full Name", value=student_row['name'])
-                    new_photo = st.text_input("Photo URL", value=student_row['photo_url'])
-                    new_addr = st.text_input("Address", value=student_row['address'])
-                    new_abacus = st.text_input("Abacus Level", value=student_row['abacus_level'])
-                    new_vedic = st.text_input("Vedic Level", value=student_row['vedic_level'])
-                    new_remark = st.text_area("Progress Remark", value=student_row['progress_remark'])
-                    
-                    if st.form_submit_button("Sheet Madhe Update Kara"):
-                        # Dataframe madhe badal karne
-                        df.loc[df['name'] == selected_name, ['name', 'photo_url', 'address', 'abacus_level', 'vedic_level', 'progress_remark']] = [new_name, new_photo, new_addr, new_abacus, new_vedic, new_remark]
-                        conn.update(worksheet="Sheet1", data=df)
-                        st.success("Data update jala!")
-
+                st.subheader("हजेरी मार्क करा")
+                target_sid = st.selectbox("विद्यार्थी निवडा", df['student_id'].tolist())
+                status = st.radio("स्थिती", ["Present", "Absent", "Holiday", "Emergency"])
+                if st.button("Save Attendance"):
+                    # attendance_logs शीटमध्ये डेटा लिहिणे
+                    try:
+                        log_sheet = workbook.worksheet("attendance_logs")
+                        log_sheet.append_row([target_sid, str(datetime.now().date()), status])
+                        st.success("हजेरी सेव्ह झाली!")
+                    except:
+                        st.error("'attendance_logs' नावाची शीट सापडली नाही!")
+            
             with tab2:
-                st.subheader("Dainandin Hajeri (Attendance)")
-                target_sid = st.selectbox("Vidyarthi ID निवडा", df['student_id'].tolist())
-                today = st.date_input("Tarikh", datetime.now())
-                status = st.radio("Status", ["Present", "Absent", "Holiday", "Emergency"])
-                
-                if st.button("Hajeri Save Kara"):
-                    logs = get_attendance_logs()
-                    new_log = pd.DataFrame([[target_sid, str(today), status]], columns=['student_id', 'date', 'status'])
-                    updated_logs = pd.concat([logs, new_log], ignore_index=True)
-                    conn.update(worksheet="attendance_logs", data=updated_logs)
-                    st.success(f"{target_sid} sathi {status} mark jale!")
-
-            with tab3:
-                st.subheader("Fee Management")
-                st.dataframe(df[['student_id', 'name', 'fees', 'abacus_level']])
-                st.write("Tip: Fee status badlanyasathi 'Student Management' tab vapra.")
-
-        elif admin_pwd != "":
-            st.error("Admin password chukicha ahe!")
+                st.dataframe(df)
+        elif admin_pwd:
+            st.error("चुकीचा पासवर्ड!")
 
 if __name__ == "__main__":
     main()
-
-
