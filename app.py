@@ -81,26 +81,78 @@ def main():
         admin_pwd = st.sidebar.text_input("Admin Password", type="password")
         
         if admin_pwd == "VISHWA_ADMIN_123":
-            tab1, tab2 = st.tabs(["हजेरी भरा", "विद्यार्थी यादी"])
+            # आता आपण ४ टॅब्स करूया
+            tab1, tab2, tab3, tab4 = st.tabs(["➕ नवीन विद्यार्थी जोडा", "📝 हजेरी भरा", "📊 विद्यार्थी यादी", "💰 फी स्टेटस"])
             
+            # --- टॅब १: नवीन विद्यार्थी जोडा ---
             with tab1:
+                st.subheader("नवीन विद्यार्थ्याची नोंदणी")
+                with st.form("add_student_form", clear_on_submit=True):
+                    new_sid = st.text_input("विद्यार्थी ID (उदा. VC101)")
+                    new_name = st.text_input("विद्यार्थ्याचे पूर्ण नाव")
+                    new_pwd = st.text_input("लॉगिन पासवर्ड", value="12345")
+                    new_photo = st.text_input("फोटो URL (Google Drive/Image link)")
+                    new_addr = st.text_area("पत्ता")
+                    
+                    c1, c2 = st.columns(2)
+                    new_abacus = c1.selectbox("Abacus Level", ["Level 1", "Level 2", "Level 3", "Level 4", "Level 5", "None"])
+                    new_vedic = c2.selectbox("Vedic Math Level", ["Level 1", "Level 2", "Level 3", "None"])
+                    
+                    new_fees = st.selectbox("फी स्टेटस", ["Pending", "Paid"])
+                    
+                    submitted = st.form_submit_button("विद्यार्थी जोडा")
+                    
+                    if submitted:
+                        if new_sid and new_name:
+                            try:
+                                # गुगल शीटच्या Sheet1 मध्ये नवीन रांग (Row) जोडणे
+                                sheet1 = workbook.get_worksheet(0)
+                                # तुमच्या शीटच्या कॉलमच्या क्रमानुसार ही लिस्ट असावी:
+                                # student_id, password, name, photo_url, address, abacus_level, vedic_level, attendance_percent, fees, progress_remark
+                                sheet1.append_row([
+                                    new_sid, new_pwd, new_name, new_photo, new_addr, 
+                                    new_abacus, new_vedic, "0", new_fees, "नवीन प्रवेश"
+                                ])
+                                st.success(f"✅ {new_name} ची नोंदणी यशस्वी झाली!")
+                            except Exception as e:
+                                st.error(f"एरर आला: {e}")
+                        else:
+                            st.warning("ID आणि नाव भरणे अनिवार्य आहे!")
+
+            # --- टॅब २: हजेरी भरा ---
+            with tab2:
                 st.subheader("हजेरी मार्क करा")
-                target_sid = st.selectbox("विद्यार्थी निवडा", df['student_id'].tolist())
-                status = st.radio("स्थिती", ["Present", "Absent", "Holiday", "Emergency"])
+                target_sid = st.selectbox("विद्यार्थी निवडा (ID)", df['student_id'].tolist())
+                status = st.radio("स्थिती", ["Present", "Absent", "Holiday", "Emergency"], horizontal=True)
                 if st.button("Save Attendance"):
-                    # attendance_logs शीटमध्ये डेटा लिहिणे
                     try:
                         log_sheet = workbook.worksheet("attendance_logs")
                         log_sheet.append_row([target_sid, str(datetime.now().date()), status])
-                        st.success("हजेरी सेव्ह झाली!")
+                        st.success(f"✅ {target_sid} साठी {status} हजेरी सेव्ह झाली!")
                     except:
-                        st.error("'attendance_logs' नावाची शीट सापडली नाही!")
-            
-            with tab2:
+                        st.error("'attendance_logs' नावाची शीट सापडली नाही! कृपया गुगल शीटमध्ये ही टॅब बनवा.")
+
+            # --- टॅब ३: विद्यार्थी यादी ---
+            with tab3:
+                st.subheader("सर्व विद्यार्थी")
                 st.dataframe(df)
+
+            # --- टॅब ४: फी मॅनेजमेंट ---
+            with tab4:
+                st.subheader("फी रिपोर्ट")
+                paid_count = len(df[df['fees'].str.lower() == 'paid'])
+                pending_count = len(df[df['fees'].str.lower() == 'pending'])
+                
+                col_f1, col_f2 = st.columns(2)
+                col_f1.metric("Paid Students", paid_count)
+                col_f2.metric("Pending Students", pending_count)
+                
+                st.table(df[['student_id', 'name', 'fees']])
+
         elif admin_pwd:
             st.error("चुकीचा पासवर्ड!")
 
 if __name__ == "__main__":
     main()
+
 
