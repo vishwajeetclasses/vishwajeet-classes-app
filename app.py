@@ -101,7 +101,8 @@ def main():
         admin_pwd = st.sidebar.text_input("Admin Password", type="password")
         
         if admin_pwd == "VISHWA_ADMIN_123":
-            tab1, tab2, tab3, tab4 = st.tabs(["➕ नवीन विद्यार्थी", "📝 हजेरी", "📊 विद्यार्थी यादी", "💰 फी अपडेट"])
+            # नवीन टॅब "💰 फी रिपोर्ट" जोडला आहे
+            tab1, tab2, tab3, tab4, tab5 = st.tabs(["➕ नवीन विद्यार्थी", "📝 हजेरी", "📊 विद्यार्थी यादी", "🔄 फी अपडेट", "💰 फी रिपोर्ट"])
             
             with tab1:
                 st.subheader("नवीन नोंदणी")
@@ -132,6 +133,7 @@ def main():
                                     new_abacus, new_vedic, "0", in_total, in_paid, in_rem, "नवीन प्रवेश"
                                 ])
                                 st.success(f"✅ {new_name} ची नोंदणी यशस्वी!")
+                                st.rerun()
                             except Exception as e:
                                 st.error(f"Error: {e}")
                         else:
@@ -151,17 +153,16 @@ def main():
 
             with tab3:
                 st.subheader("सर्व विद्यार्थी माहिती")
-                st.dataframe(df)
+                st.dataframe(df, use_container_width=True)
 
             with tab4:
-                st.subheader("💰 फी अपडेट करा")
+                st.subheader("🔄 विद्यार्थ्याची फी अपडेट करा")
                 if not df.empty:
                     student_to_update = st.selectbox("विद्यार्थी निवडा", df['name'].tolist(), key="fee_update_select")
                     s_row = df[df['name'] == student_to_update].iloc[0]
                     
                     with st.container(border=True):
                         u_col1, u_col2 = st.columns(2)
-                        # इथे safe_int वापरल्यामुळे आता एरर येणार नाही
                         u_total = u_col1.number_input("Total Fees", value=safe_int(s_row.get('total_fees'), 6000))
                         u_paid = u_col2.number_input("Paid Amount", value=safe_int(s_row.get('paid_fees'), 0))
                         
@@ -171,7 +172,6 @@ def main():
                         if st.button("Update Fee Records"):
                             try:
                                 cell = sheet1.find(str(s_row['student_id']))
-                                # कॉलम नंबर तुमच्या शीटनुसार तपासा (९=Total, १०=Paid, ११=Remaining)
                                 sheet1.update_cell(cell.row, 9, u_total)
                                 sheet1.update_cell(cell.row, 10, u_paid)
                                 sheet1.update_cell(cell.row, 11, u_rem)
@@ -181,6 +181,33 @@ def main():
                                 st.error(f"अपडेट करताना चूक झाली: {e}")
                 else:
                     st.write("अजून एकही विद्यार्थी ऍड केलेला नाही.")
+
+            with tab5:
+                st.subheader("💰 संपूर्ण फी अहवाल (Fee Report)")
+                
+                # कॅल्क्युलेशन
+                total_collected = df['paid_fees'].apply(lambda x: safe_int(x)).sum()
+                total_pending = df['remaining_fees'].apply(lambda x: safe_int(x)).sum()
+                
+                paid_students_count = len(df[df['remaining_fees'].apply(lambda x: safe_int(x)) <= 0])
+                unpaid_students_count = len(df[df['remaining_fees'].apply(lambda x: safe_int(x)) > 0])
+                
+                # वरचे मेट्रिक्स
+                m1, m2, m3, m4 = st.columns(4)
+                m1.metric("Paid Students", paid_students_count)
+                m2.metric("Unpaid Students", unpaid_students_count)
+                m3.metric("Total Collected", f"₹{total_collected}")
+                m4.metric("Total Remaining", f"₹{total_pending}", delta_color="inverse")
+                
+                st.divider()
+                
+                # विद्यार्थ्यांची लिस्ट
+                st.write("### 📝 विद्यार्थ्यांनुसार फी तपशील")
+                fee_df = df[['name', 'total_fees', 'paid_fees', 'remaining_fees']].copy()
+                fee_df.columns = ['विद्यार्थ्याचे नाव', 'एकूण फी', 'भरलेली फी', 'शिल्लक फी']
+                
+                # टेबल फॉरमॅटमध्ये दाखवणे
+                st.table(fee_df)
 
         elif admin_pwd:
             st.error("पासवर्ड चुकीचा आहे!")
