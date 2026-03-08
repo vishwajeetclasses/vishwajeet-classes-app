@@ -11,7 +11,7 @@ st.set_page_config(
 # २. गुगल शीट कनेक्शन (Data Loading)
 def load_data():
     # तुमची शीटची लिंक येथे पेस्ट करा
-    sheet_url = "तुमची_पूर्ण_शीट_लिंक_येथे_टाका"
+    sheet_url = "https://docs.google.com/spreadsheets/d/1IMw_nRER8fz-yUtgwKyt12Xmw4ZgwoSh4a19seAFzqc/edit?usp=sharingा"
     
     if "edit" in sheet_url:
         csv_url = sheet_url.split('/edit')[0] + '/export?format=csv'
@@ -105,3 +105,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
