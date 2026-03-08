@@ -2,9 +2,13 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 
+# 1. Page Setup
 st.set_page_config(page_title="Vishwajeet Classes Pro", layout="wide")
 
-# डेटा लोड करणे
+# Admin Password (yehe badla)
+ADMIN_PASSWORD = "VISHWAJEET_ADMIN" 
+
+# 2. Data Load Function
 def load_data(url):
     try:
         csv_url = url.split('/edit')[0] + '/export?format=csv'
@@ -15,78 +19,97 @@ def load_data(url):
         return None
 
 def main():
-    # तुमची गुगल शीट लिंक येथे टाका
-    sheet_url = "https://docs.google.com/spreadsheets/d/1IMw_nRER8fz-yUtgwKyt12Xmw4ZgwoSh4a19seAFzqc/edit?usp=sharingा"
+    # Tumchi Google Sheet Link
+    sheet_url = "https://docs.google.com/spreadsheets/d/1IMw_nRER8fz-yUtgwKyt12Xmw4ZgwoSh4a19seAFzqc/edit?usp=sharing"
     df = load_data(sheet_url)
 
     if df is not None:
         data_dict = df.set_index('student_id').to_dict('index')
 
-        if "logged_in" not in st.session_state:
-            st.session_state["logged_in"] = False
+        # Sidebar Menu
+        menu = st.sidebar.selectbox("Menu", ["Student Login", "Admin Panel"])
 
-        if not st.session_state["logged_in"]:
-            st.title("🚩 विश्वजीत क्लासेस")
-            sid = st.text_input("विद्यार्थी ID")
-            pwd = st.text_input("पासवर्ड", type="password")
-            if st.button("Login"):
-                if sid in data_dict and str(data_dict[sid]["password"]) == str(pwd):
-                    st.session_state["logged_in"] = True
-                    st.session_state["sid"] = sid
-                    st.session_state["info"] = data_dict[sid]
-                    st.rerun()
-                else:
-                    st.error("ID/Password चुकीचा आहे!")
-        else:
-            # --- STUDENT DASHBOARD ---
-            info = st.session_state["info"]
-            
-            with st.sidebar:
-                st.image(info.get('photo_url', "https://via.placeholder.com/150"), width=100)
-                st.write(f"**{info.get('name')}**")
+        if menu == "Student Login":
+            if not st.session_state.get("logged_in"):
+                st.title("🎓 Student Portal")
+                sid = st.text_input("Vidyarthi ID")
+                pwd = st.text_input("Password", type="password")
+                if st.button("Login"):
+                    if sid in data_dict and str(data_dict[sid]["password"]) == str(pwd):
+                        st.session_state["logged_in"] = True
+                        st.session_state["info"] = data_dict[sid]
+                        st.rerun()
+                    else:
+                        st.error("Chukicha ID/Password!")
+            else:
+                # --- STUDENT DASHBOARD ---
+                info = st.session_state["info"]
+                st.title(f"Namaste, {info['name']}!")
+                
+                # Profile Photo ani Basic Info
+                col1, col2 = st.columns([0.2, 0.8])
+                with col1:
+                    st.image(info.get('photo_url', "https://via.placeholder.com/150"), width=120)
+                with col2:
+                    st.write(f"📍 **Address:** {info.get('address')}")
+                    st.info(f"Abacus: {info.get('abacus_level')} | Vedic Math: {info.get('vedic_level')}")
+
+                st.divider()
+                
+                # Attendance Calendar Look
+                st.subheader("📅 Attendance")
+                st.markdown("""
+                <style>
+                .box { padding:10px; border-radius:5px; text-align:center; font-weight:bold; color:white; }
+                .p { background-color: #28a745; } .a { background-color: #dc3545; }
+                .h { background-color: #ffc107; color:black; } .e { background-color: #007bff; }
+                </style>
+                """, unsafe_allow_html=True)
+                
+                st.write("Current Month Status:")
+                c = st.columns(7)
+                # Sample display - actual data 'attendance_logs' sheet madhun gheta yeil
+                c[0].markdown('<div class="box p">1</div>', unsafe_allow_html=True)
+                c[1].markdown('<div class="box a">2</div>', unsafe_allow_html=True)
+                c[2].markdown('<div class="box h">3</div>', unsafe_allow_html=True)
+                c[3].markdown('<div class="box p">4</div>', unsafe_allow_html=True)
+                
                 if st.button("Logout"):
                     st.session_state["logged_in"] = False
                     st.rerun()
 
-            # Profile Info
-            st.title(f"विद्यार्थी डॅशबोर्ड - {info.get('name')}")
+        elif menu == "Admin Panel":
+            st.title("🛠️ Admin Control Panel")
+            admin_pwd = st.text_input("Admin Password Taka", type="password")
             
-            c1, c2, c3 = st.columns(3)
-            c1.info(f"**Abacus:** {info.get('abacus_level')}")
-            c2.success(f"**Vedic Math:** {info.get('vedic_level')}")
-            c3.warning(f"**Fees:** {info.get('fees')}")
+            if admin_pwd == ADMIN_PASSWORD:
+                st.success("Access Granted!")
+                
+                tab1, tab2, tab3 = st.tabs(["Update Student", "Mark Attendance", "Fee Status"])
+                
+                with tab1:
+                    st.write("### Student Information Update")
+                    selected_student = st.selectbox("Vidyarthi Nivada", df['name'].tolist())
+                    # Ithe tumi data edit karun update karu shakta
+                    st.info("Update feature sathi Google Sheets API setup lagel.")
 
-            st.divider()
+                with tab2:
+                    st.write("### Hajeri Lavane")
+                    date_input = st.date_input("Tarikh", datetime.now())
+                    status = st.radio("Status", ["Present", "Absent", "Holiday", "Emergency"])
+                    if st.button("Save Attendance"):
+                        st.write(f"Data Saved for {date_input} as {status}")
+                        # Logic to write to Google Sheet
 
-            # --- CALENDAR VIEW LOGIC ---
-            st.subheader("📅 हजेरी कॅलेंडर (Attendance)")
-            st.markdown("""
-            <style>
-            .present { background-color: #28a745; color: white; padding: 10px; border-radius: 5px; text-align: center; }
-            .absent { background-color: #dc3545; color: white; padding: 10px; border-radius: 5px; text-align: center; }
-            .holiday { background-color: #ffc107; color: black; padding: 10px; border-radius: 5px; text-align: center; }
-            .emergency { background-color: #007bff; color: white; padding: 10px; border-radius: 5px; text-align: center; }
-            </style>
-            """, unsafe_allow_html=True)
+                with tab3:
+                    st.write("### Fee Management")
+                    st.dataframe(df[['student_id', 'name', 'fees']])
 
-            # एक साधी कॅलेंडर ग्रीड (Sample)
-            days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
-            cols = st.columns(7)
-            for i, day in enumerate(days):
-                cols[i].write(f"**{day}**")
-            
-            # येथे आपण डेटाबेसवरून रंग ठरवू शकतो, सध्या सॅम्पल म्हणून:
-            c = st.columns(7)
-            c[0].markdown('<div class="present">1</div>', unsafe_allow_html=True)
-            c[1].markdown('<div class="absent">2</div>', unsafe_allow_html=True)
-            c[2].markdown('<div class="holiday">3</div>', unsafe_allow_html=True)
-            c[3].markdown('<div class="present">4</div>', unsafe_allow_html=True)
-            c[4].markdown('<div class="emergency">5</div>', unsafe_allow_html=True)
-            c[5].markdown('<div class="present">6</div>', unsafe_allow_html=True)
-            c[6].markdown('<div class="present">7</div>', unsafe_allow_html=True)
+            elif admin_pwd != "":
+                st.error("Chukicha Admin Password!")
 
     else:
-        st.error("डेटाबेस कनेक्ट झाला नाही.")
+        st.error("Database connection failed!")
 
 if __name__ == "__main__":
     main()
