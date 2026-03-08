@@ -2,93 +2,91 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 
-# १. पेज सेटअप
 st.set_page_config(page_title="Vishwajeet Classes Pro", layout="wide")
 
-# २. डेटा लोड करणे
+# डेटा लोड करणे
 def load_data(url):
     try:
         csv_url = url.split('/edit')[0] + '/export?format=csv'
-        return pd.read_csv(csv_url)
+        df = pd.read_csv(csv_url)
+        df.columns = [c.strip().lower() for c in df.columns]
+        return df
     except:
         return None
 
 def main():
-    # तुमची शीट लिंक (येथे टाका)
+    # तुमची गुगल शीट लिंक येथे टाका
     sheet_url = "https://docs.google.com/spreadsheets/d/1IMw_nRER8fz-yUtgwKyt12Xmw4ZgwoSh4a19seAFzqc/edit?usp=sharingा"
     df = load_data(sheet_url)
 
     if df is not None:
-        df.columns = [c.strip().lower() for c in df.columns]
         data_dict = df.set_index('student_id').to_dict('index')
 
         if "logged_in" not in st.session_state:
             st.session_state["logged_in"] = False
 
         if not st.session_state["logged_in"]:
-            # --- LOGIN SCREEN ---
-            st.markdown("<h1 style='text-align: center;'>🎓 Vishwajeet Classes</h1>", unsafe_allow_html=True)
-            with st.container():
-                sid = st.text_input("विद्यार्थी ID")
-                pwd = st.text_input("पासवर्ड", type="password")
-                if st.button("लॉगिन करा"):
-                    if sid in data_dict and str(data_dict[sid]["password"]) == str(pwd):
-                        st.session_state["logged_in"] = True
-                        st.session_state["sid"] = sid
-                        st.session_state["info"] = data_dict[sid]
-                        st.rerun()
-                    else:
-                        st.error("चुकीचा ID/Password!")
+            st.title("🚩 विश्वजीत क्लासेस")
+            sid = st.text_input("विद्यार्थी ID")
+            pwd = st.text_input("पासवर्ड", type="password")
+            if st.button("Login"):
+                if sid in data_dict and str(data_dict[sid]["password"]) == str(pwd):
+                    st.session_state["logged_in"] = True
+                    st.session_state["sid"] = sid
+                    st.session_state["info"] = data_dict[sid]
+                    st.rerun()
+                else:
+                    st.error("ID/Password चुकीचा आहे!")
         else:
             # --- STUDENT DASHBOARD ---
             info = st.session_state["info"]
             
-            # Sidebar Logout
-            if st.sidebar.button("Logout"):
-                st.session_state["logged_in"] = False
-                st.rerun()
+            with st.sidebar:
+                st.image(info.get('photo_url', "https://via.placeholder.com/150"), width=100)
+                st.write(f"**{info.get('name')}**")
+                if st.button("Logout"):
+                    st.session_state["logged_in"] = False
+                    st.rerun()
 
-            # Profile Section
-            col1, col2 = st.columns([0.3, 0.7])
-            with col1:
-                # फोटो नसेल तर प्लेसहोल्डर दाखवणे
-                photo = info.get('photo_url', "https://www.w3schools.com/howto/img_avatar.png")
-                st.image(photo, width=150, caption=f"ID: {st.session_state['sid']}")
+            # Profile Info
+            st.title(f"विद्यार्थी डॅशबोर्ड - {info.get('name')}")
             
-            with col2:
-                st.title(f"नमस्ते, {info.get('name')}!")
-                st.write(f"📍 **पत्ता:** {info.get('address', 'N/A')}")
-
-            st.divider()
-
-            # Course & Progress
             c1, c2, c3 = st.columns(3)
-            with c1:
-                st.info(f"🧮 **Abacus Level**\n### {info.get('abacus_level', 'Basic')}")
-            with c2:
-                st.success(f"🔢 **Vedic Math**\n### {info.get('vedic_level', 'Basic')}")
-            with c3:
-                fee_status = str(info.get('fees')).capitalize()
-                color = "green" if fee_status == "Paid" else "red"
-                st.markdown(f"💰 **Fee Status**\n### :{color}[{fee_status}]")
+            c1.info(f"**Abacus:** {info.get('abacus_level')}")
+            c2.success(f"**Vedic Math:** {info.get('vedic_level')}")
+            c3.warning(f"**Fees:** {info.get('fees')}")
 
             st.divider()
 
-            # Attendance Calendar Feature
-            st.subheader("📅 तुमची हजेरी (Attendance Calendar)")
-            # येथे आपण एक साधा रंगीत मेसेज आणि चार्ट दाखवू शकतो
-            st.write(f"एकूण हजेरी: **{info.get('attendance_percent', 0)}%**")
-            
-            # कॅलेंडर व्ह्यूसाठी 'Dummy' कलर कोडिंग (खऱ्या डेटासाठी आपण स्वतंत्र शीट जोडू)
+            # --- CALENDAR VIEW LOGIC ---
+            st.subheader("📅 हजेरी कॅलेंडर (Attendance)")
             st.markdown("""
-            🟢 **हिरवा:** उपस्थित | 🔴 **लाल:** अनुपस्थित | 🟡 **पिवळा:** सुट्टी | 🔵 **निळा:** इमर्जन्सी सुट्टी
-            """)
+            <style>
+            .present { background-color: #28a745; color: white; padding: 10px; border-radius: 5px; text-align: center; }
+            .absent { background-color: #dc3545; color: white; padding: 10px; border-radius: 5px; text-align: center; }
+            .holiday { background-color: #ffc107; color: black; padding: 10px; border-radius: 5px; text-align: center; }
+            .emergency { background-color: #007bff; color: white; padding: 10px; border-radius: 5px; text-align: center; }
+            </style>
+            """, unsafe_allow_html=True)
+
+            # एक साधी कॅलेंडर ग्रीड (Sample)
+            days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+            cols = st.columns(7)
+            for i, day in enumerate(days):
+                cols[i].write(f"**{day}**")
             
-            # येथे आपण प्रोग्रेस रिमार्क दाखवूया
-            st.chat_message("teacher").write(f"**शिक्षकांचा अभिप्राय:** {info.get('progress_remark')}")
+            # येथे आपण डेटाबेसवरून रंग ठरवू शकतो, सध्या सॅम्पल म्हणून:
+            c = st.columns(7)
+            c[0].markdown('<div class="present">1</div>', unsafe_allow_html=True)
+            c[1].markdown('<div class="absent">2</div>', unsafe_allow_html=True)
+            c[2].markdown('<div class="holiday">3</div>', unsafe_allow_html=True)
+            c[3].markdown('<div class="present">4</div>', unsafe_allow_html=True)
+            c[4].markdown('<div class="emergency">5</div>', unsafe_allow_html=True)
+            c[5].markdown('<div class="present">6</div>', unsafe_allow_html=True)
+            c[6].markdown('<div class="present">7</div>', unsafe_allow_html=True)
 
     else:
-        st.error("डेटाबेस लोड होत नाहीये.")
+        st.error("डेटाबेस कनेक्ट झाला नाही.")
 
 if __name__ == "__main__":
     main()
