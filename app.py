@@ -9,10 +9,8 @@ st.set_page_config(page_title="Vishwajeet Classes Pro", layout="wide")
 
 # २. गुगल शीट कनेक्शन (gspread Method)
 def get_client():
-    # १. आधी 'connections' की शोधण्याचा प्रयत्न करणे
     if "connections" in st.secrets and "gsheets" in st.secrets["connections"]:
         creds_info = st.secrets["connections"]["gsheets"]
-    # २. जर डायरेक्ट JSON पेस्ट केला असेल तर पूर्ण secrets वापरणे
     else:
         creds_info = dict(st.secrets)
     
@@ -22,20 +20,20 @@ def get_client():
 
 def load_data():
     client = get_client()
-    # तुमची शीट ID
     sheet_id = "1IMw_nRER8fz-yUtgwKyt12Xmw4ZgwoSh4a19seAFzqc"
     workbook = client.open_by_key(sheet_id)
     
     # Sheet1 (विद्यार्थी डेटा)
     sheet1 = workbook.get_worksheet(0)
-    df = pd.DataFrame(sheet1.get_all_records())
+    data = sheet1.get_all_records()
+    df = pd.DataFrame(data)
     df.columns = [c.strip().lower() for c in df.columns]
     
-    return df, workbook
+    return df, workbook, sheet1
 
 def main():
     try:
-        df, workbook = load_data()
+        df, workbook, sheet1 = load_data()
     except Exception as e:
         st.error(f"शीटला कनेक्ट करता आले नाही: {e}")
         return
@@ -64,14 +62,31 @@ def main():
         else:
             info = st.session_state["info"]
             st.title(f"नमस्ते, {info['name']}! 👋")
-            # फोटो दाखवणे
-            st.image(info.get('photo_url', "https://via.placeholder.com/150"), width=150)
             
-            col1, col2 = st.columns(2)
-            col1.metric("Abacus Level", info.get('abacus_level', 'N/A'))
-            col2.metric("Vedic Math", info.get('vedic_level', 'N/A'))
+            col_img, col_info = st.columns([1, 3])
+            with col_img:
+                st.image(info.get('photo_url', "https://via.placeholder.com/150"), width=150)
             
-            if st.button("Logout"):
+            with col_info:
+                st.subheader("📊 माझी प्रगती")
+                c1, c2 = st.columns(2)
+                c1.metric("Abacus Level", info.get('abacus_level', 'N/A'))
+                c2.metric("Vedic Math", info.get('vedic_level', 'N/A'))
+
+            # --- फी कार्ड ---
+            st.divider()
+            st.subheader("💰 फी तपशील")
+            with st.container(border=True):
+                f1, f2, f3 = st.columns(3)
+                total = float(info.get('total_fees', 0))
+                paid = float(info.get('paid_fees', 0))
+                rem = total - paid
+                
+                f1.metric("एकूण फी", f"₹{total}")
+                f2.metric("भरलेली फी", f"₹{paid}", delta=f"₹{paid}", delta_color="normal")
+                f3.metric("बाकी फी", f"₹{rem}", delta=f"-₹{rem}" if rem > 0 else "Clear", delta_color="inverse")
+
+            if st.sidebar.button("Logout"):
                 st.session_state["logged_in"] = False
                 st.rerun()
 
@@ -81,78 +96,89 @@ def main():
         admin_pwd = st.sidebar.text_input("Admin Password", type="password")
         
         if admin_pwd == "VISHWA_ADMIN_123":
-            # आता आपण ४ टॅब्स करूया
-            tab1, tab2, tab3, tab4 = st.tabs(["➕ नवीन विद्यार्थी जोडा", "📝 हजेरी भरा", "📊 विद्यार्थी यादी", "💰 फी स्टेटस"])
+            tab1, tab2, tab3, tab4 = st.tabs(["➕ नवीन विद्यार्थी", "📝 हजेरी", "📊 विद्यार्थी यादी", "💰 फी अपडेट"])
             
-            # --- टॅब १: नवीन विद्यार्थी जोडा ---
             with tab1:
-                st.subheader("नवीन विद्यार्थ्याची नोंदणी")
+                st.subheader("नवीन नोंदणी")
                 with st.form("add_student_form", clear_on_submit=True):
-                    new_sid = st.text_input("विद्यार्थी ID (उदा. VC101)")
-                    new_name = st.text_input("विद्यार्थ्याचे पूर्ण नाव")
-                    new_pwd = st.text_input("लॉगिन पासवर्ड", value="12345")
-                    new_photo = st.text_input("फोटो URL (Google Drive/Image link)")
+                    new_sid = st.text_input("विद्यार्थी ID")
+                    new_name = st.text_input("पूर्ण नाव")
+                    new_pwd = st.text_input("पासवर्ड", value="12345")
+                    new_photo = st.text_input("फोटो URL")
                     new_addr = st.text_area("पत्ता")
                     
                     c1, c2 = st.columns(2)
                     new_abacus = c1.selectbox("Abacus Level", ["Level 1", "Level 2", "Level 3", "Level 4", "Level 5", "None"])
-                    new_vedic = c2.selectbox("Vedic Math Level", ["Level 1", "Level 2", "Level 3", "None"])
+                    new_vedic = c2.selectbox("Vedic Math", ["Level 1", "Level 2", "Level 3", "None"])
                     
-                    new_fees = st.selectbox("फी स्टेटस", ["Pending", "Paid"])
+                    st.write("---")
+                    cf1, cf2 = st.columns(2)
+                    in_total = cf1.number_input("एकूण फी (Total)", min_value=0, value=6000)
+                    in_paid = cf2.number_input("भरलेली फी (Paid)", min_value=0, value=0)
                     
-                    submitted = st.form_submit_button("विद्यार्थी जोडा")
+                    submitted = st.form_submit_button("विद्यार्थी सेव्ह करा")
                     
                     if submitted:
                         if new_sid and new_name:
                             try:
-                                # गुगल शीटच्या Sheet1 मध्ये नवीन रांग (Row) जोडणे
-                                sheet1 = workbook.get_worksheet(0)
-                                # तुमच्या शीटच्या कॉलमच्या क्रमानुसार ही लिस्ट असावी:
-                                # student_id, password, name, photo_url, address, abacus_level, vedic_level, attendance_percent, fees, progress_remark
+                                # Calculation
+                                in_rem = in_total - in_paid
+                                # Append to Sheet1
+                                # क्रमाने: sid, pwd, name, photo, addr, abacus, vedic, att_%, total, paid, remaining, remark
                                 sheet1.append_row([
                                     new_sid, new_pwd, new_name, new_photo, new_addr, 
-                                    new_abacus, new_vedic, "0", new_fees, "नवीन प्रवेश"
+                                    new_abacus, new_vedic, "0", in_total, in_paid, in_rem, "नवीन प्रवेश"
                                 ])
-                                st.success(f"✅ {new_name} ची नोंदणी यशस्वी झाली!")
+                                st.success(f"✅ {new_name} ची नोंदणी यशस्वी!")
                             except Exception as e:
-                                st.error(f"एरर आला: {e}")
+                                st.error(f"Error: {e}")
                         else:
-                            st.warning("ID आणि नाव भरणे अनिवार्य आहे!")
+                            st.warning("ID आणि नाव आवश्यक आहे!")
 
-            # --- टॅब २: हजेरी भरा ---
             with tab2:
                 st.subheader("हजेरी मार्क करा")
                 target_sid = st.selectbox("विद्यार्थी निवडा (ID)", df['student_id'].tolist())
-                status = st.radio("स्थिती", ["Present", "Absent", "Holiday", "Emergency"], horizontal=True)
+                status = st.radio("स्थिती", ["Present", "Absent", "Holiday"], horizontal=True)
                 if st.button("Save Attendance"):
                     try:
                         log_sheet = workbook.worksheet("attendance_logs")
                         log_sheet.append_row([target_sid, str(datetime.now().date()), status])
-                        st.success(f"✅ {target_sid} साठी {status} हजेरी सेव्ह झाली!")
+                        st.success(f"✅ {target_sid} ची हजेरी सेव्ह झाली!")
                     except:
-                        st.error("'attendance_logs' नावाची शीट सापडली नाही! कृपया गुगल शीटमध्ये ही टॅब बनवा.")
+                        st.error("'attendance_logs' शीट सापडली नाही!")
 
-            # --- टॅब ३: विद्यार्थी यादी ---
             with tab3:
-                st.subheader("सर्व विद्यार्थी")
+                st.subheader("सर्व विद्यार्थी माहिती")
                 st.dataframe(df)
 
-            # --- टॅब ४: फी मॅनेजमेंट ---
             with tab4:
-                st.subheader("फी रिपोर्ट")
-                paid_count = len(df[df['fees'].str.lower() == 'paid'])
-                pending_count = len(df[df['fees'].str.lower() == 'pending'])
+                st.subheader("💰 फी अपडेट करा")
+                student_to_update = st.selectbox("विद्यार्थी निवडा", df['name'].tolist(), key="fee_update_select")
+                s_row = df[df['name'] == student_to_update].iloc[0]
                 
-                col_f1, col_f2 = st.columns(2)
-                col_f1.metric("Paid Students", paid_count)
-                col_f2.metric("Pending Students", pending_count)
-                
-                st.table(df[['student_id', 'name', 'fees']])
+                with st.container(border=True):
+                    u_col1, u_col2 = st.columns(2)
+                    u_total = u_col1.number_input("Total Fees", value=int(s_row.get('total_fees', 6000)))
+                    u_paid = u_col2.number_input("Paid Amount", value=int(s_row.get('paid_fees', 0)))
+                    
+                    u_rem = u_total - u_paid
+                    st.info(f"बाकी फी: ₹{u_rem}")
+                    
+                    if st.button("Update Fee Records"):
+                        try:
+                            # Row शोधणे (Student ID नुसार)
+                            cell = sheet1.find(str(s_row['student_id']))
+                            # तुमच्या शीटमध्ये columns जसे असतील तसे हे नंबर्स बदला (उदा. 9, 10, 11)
+                            sheet1.update_cell(cell.row, 9, u_total)    # Total Fees
+                            sheet1.update_cell(cell.row, 10, u_paid)   # Paid Fees
+                            sheet1.update_cell(cell.row, 11, u_rem)    # Remaining Fees
+                            st.success(f"✅ {student_to_update} चा हिशोब अपडेट झाला!")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"अपडेट करताना चूक झाली: {e}")
 
         elif admin_pwd:
-            st.error("चुकीचा पासवर्ड!")
+            st.error("पासवर्ड चुकीचा आहे!")
 
 if __name__ == "__main__":
     main()
-
-
