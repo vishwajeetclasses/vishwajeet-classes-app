@@ -34,7 +34,8 @@ def load_data():
     sheet1 = workbook.get_worksheet(0)
     data = sheet1.get_all_records()
     df = pd.DataFrame(data)
-    df.columns = [c.strip().lower() for c in df.columns]
+    # कॉलमची नावं स्वच्छ करणे
+    df.columns = [c.strip().lower().replace(" ", "_") for c in df.columns]
     return df, workbook, sheet1
 
 def main():
@@ -50,50 +51,53 @@ def main():
     # --- विद्यार्थी लॉगिन विभाग ---
     if choice == "विद्यार्थी लॉगिन":
         st.header("🎓 विद्यार्थी पोर्टल")
-        data_dict = df.set_index('student_id').to_dict('index')
-        
-        if "logged_in" not in st.session_state:
-            st.session_state["logged_in"] = False
-
-        if not st.session_state["logged_in"]:
-            sid = st.text_input("विद्यार्थी ID")
-            pwd = st.text_input("पासवर्ड", type="password")
-            if st.button("लॉगिन"):
-                if sid in data_dict and str(data_dict[sid]["password"]) == str(pwd):
-                    st.session_state["logged_in"] = True
-                    st.session_state["info"] = data_dict[sid]
-                    st.rerun()
-                else:
-                    st.error("चुकीचा ID किंवा पासवर्ड!")
-        else:
-            info = st.session_state["info"]
-            st.title(f"नमस्ते, {info['name']}! 👋")
+        if 'student_id' in df.columns:
+            data_dict = df.set_index('student_id').to_dict('index')
             
-            col_img, col_info = st.columns([1, 3])
-            with col_img:
-                st.image(info.get('photo_url', "https://via.placeholder.com/150"), width=150)
-            
-            with col_info:
-                st.subheader("📊 माझी प्रगती")
-                c1, c2 = st.columns(2)
-                c1.metric("Abacus Level", info.get('abacus_level', 'N/A'))
-                c2.metric("Vedic Math", info.get('vedic_level', 'N/A'))
-
-            st.divider()
-            st.subheader("💰 फी तपशील")
-            with st.container(border=True):
-                f1, f2, f3 = st.columns(3)
-                total = float(safe_int(info.get('total_fees'), 6000))
-                paid = float(safe_int(info.get('paid_fees'), 0))
-                rem = total - paid
-                
-                f1.metric("एकूण फी", f"₹{total}")
-                f2.metric("भरलेली फी", f"₹{paid}")
-                f3.metric("बाकी फी", f"₹{rem}", delta=f"-₹{rem}" if rem > 0 else "Clear", delta_color="inverse")
-
-            if st.sidebar.button("Logout"):
+            if "logged_in" not in st.session_state:
                 st.session_state["logged_in"] = False
-                st.rerun()
+
+            if not st.session_state["logged_in"]:
+                sid = st.text_input("विद्यार्थी ID")
+                pwd = st.text_input("पासवर्ड", type="password")
+                if st.button("लॉगिन"):
+                    if sid in data_dict and str(data_dict[sid].get("password")) == str(pwd):
+                        st.session_state["logged_in"] = True
+                        st.session_state["info"] = data_dict[sid]
+                        st.rerun()
+                    else:
+                        st.error("चुकीचा ID किंवा पासवर्ड!")
+            else:
+                info = st.session_state["info"]
+                st.title(f"नमस्ते, {info.get('name', 'विद्यार्थी')}! 👋")
+                
+                col_img, col_info = st.columns([1, 3])
+                with col_img:
+                    st.image(info.get('photo_url', "https://via.placeholder.com/150"), width=150)
+                
+                with col_info:
+                    st.subheader("📊 माझी प्रगती")
+                    c1, c2 = st.columns(2)
+                    c1.metric("Abacus Level", info.get('abacus_level', 'N/A'))
+                    c2.metric("Vedic Math", info.get('vedic_level', 'N/A'))
+
+                st.divider()
+                st.subheader("💰 फी तपशील")
+                with st.container(border=True):
+                    f1, f2, f3 = st.columns(3)
+                    t_val = safe_int(info.get('total_fees'), 6000)
+                    p_val = safe_int(info.get('paid_fees'), 0)
+                    r_val = t_val - p_val
+                    
+                    f1.metric("एकूण फी", f"₹{t_val}")
+                    f2.metric("भरलेली फी", f"₹{p_val}")
+                    f3.metric("बाकी फी", f"₹{r_val}", delta=f"-₹{r_val}" if r_val > 0 else "Clear", delta_color="inverse")
+
+                if st.sidebar.button("Logout"):
+                    st.session_state["logged_in"] = False
+                    st.rerun()
+        else:
+            st.error("शीटमध्ये 'student_id' कॉलम सापडला नाही!")
 
     # --- ADMIN PANEL विभाग ---
     elif choice == "Admin Panel":
@@ -101,7 +105,6 @@ def main():
         admin_pwd = st.sidebar.text_input("Admin Password", type="password")
         
         if admin_pwd == "VISHWA_ADMIN_123":
-            # नवीन टॅब "💰 फी रिपोर्ट" जोडला आहे
             tab1, tab2, tab3, tab4, tab5 = st.tabs(["➕ नवीन विद्यार्थी", "📝 हजेरी", "📊 विद्यार्थी यादी", "🔄 फी अपडेट", "💰 फी रिपोर्ट"])
             
             with tab1:
@@ -141,15 +144,16 @@ def main():
 
             with tab2:
                 st.subheader("हजेरी मार्क करा")
-                target_sid = st.selectbox("विद्यार्थी निवडा (ID)", df['student_id'].tolist())
-                status = st.radio("स्थिती", ["Present", "Absent", "Holiday"], horizontal=True)
-                if st.button("Save Attendance"):
-                    try:
-                        log_sheet = workbook.worksheet("attendance_logs")
-                        log_sheet.append_row([target_sid, str(datetime.now().date()), status])
-                        st.success(f"✅ {target_sid} ची हजेरी सेव्ह झाली!")
-                    except:
-                        st.error("'attendance_logs' शीट सापडली नाही!")
+                if 'student_id' in df.columns:
+                    target_sid = st.selectbox("विद्यार्थी निवडा (ID)", df['student_id'].tolist())
+                    status = st.radio("स्थिती", ["Present", "Absent", "Holiday"], horizontal=True)
+                    if st.button("Save Attendance"):
+                        try:
+                            log_sheet = workbook.worksheet("attendance_logs")
+                            log_sheet.append_row([target_sid, str(datetime.now().date()), status])
+                            st.success(f"✅ {target_sid} ची हजेरी सेव्ह झाली!")
+                        except:
+                            st.error("'attendance_logs' शीट सापडली नाही!")
 
             with tab3:
                 st.subheader("सर्व विद्यार्थी माहिती")
@@ -157,7 +161,7 @@ def main():
 
             with tab4:
                 st.subheader("🔄 विद्यार्थ्याची फी अपडेट करा")
-                if not df.empty:
+                if not df.empty and 'name' in df.columns:
                     student_to_update = st.selectbox("विद्यार्थी निवडा", df['name'].tolist(), key="fee_update_select")
                     s_row = df[df['name'] == student_to_update].iloc[0]
                     
@@ -172,6 +176,7 @@ def main():
                         if st.button("Update Fee Records"):
                             try:
                                 cell = sheet1.find(str(s_row['student_id']))
+                                # कॉलम नंबर तुमच्या शीटनुसार तपासा
                                 sheet1.update_cell(cell.row, 9, u_total)
                                 sheet1.update_cell(cell.row, 10, u_paid)
                                 sheet1.update_cell(cell.row, 11, u_rem)
@@ -179,35 +184,35 @@ def main():
                                 st.rerun()
                             except Exception as e:
                                 st.error(f"अपडेट करताना चूक झाली: {e}")
-                else:
-                    st.write("अजून एकही विद्यार्थी ऍड केलेला नाही.")
 
             with tab5:
                 st.subheader("💰 संपूर्ण फी अहवाल (Fee Report)")
-                
-                # कॅल्क्युलेशन
-                total_collected = df['paid_fees'].apply(lambda x: safe_int(x)).sum()
-                total_pending = df['remaining_fees'].apply(lambda x: safe_int(x)).sum()
-                
-                paid_students_count = len(df[df['remaining_fees'].apply(lambda x: safe_int(x)) <= 0])
-                unpaid_students_count = len(df[df['remaining_fees'].apply(lambda x: safe_int(x)) > 0])
-                
-                # वरचे मेट्रिक्स
-                m1, m2, m3, m4 = st.columns(4)
-                m1.metric("Paid Students", paid_students_count)
-                m2.metric("Unpaid Students", unpaid_students_count)
-                m3.metric("Total Collected", f"₹{total_collected}")
-                m4.metric("Total Remaining", f"₹{total_pending}", delta_color="inverse")
-                
-                st.divider()
-                
-                # विद्यार्थ्यांची लिस्ट
-                st.write("### 📝 विद्यार्थ्यांनुसार फी तपशील")
-                fee_df = df[['name', 'total_fees', 'paid_fees', 'remaining_fees']].copy()
-                fee_df.columns = ['विद्यार्थ्याचे नाव', 'एकूण फी', 'भरलेली फी', 'शिल्लक फी']
-                
-                # टेबल फॉरमॅटमध्ये दाखवणे
-                st.table(fee_df)
+                if not df.empty:
+                    # 'remaining_fees' कॉलम नसल्यास ऑन-द-फ्लाय कॅल्क्युलेशन करणे
+                    t_fees = df['total_fees'].apply(safe_int) if 'total_fees' in df.columns else pd.Series([0]*len(df))
+                    p_fees = df['paid_fees'].apply(safe_int) if 'paid_fees' in df.columns else pd.Series([0]*len(df))
+                    r_fees = t_fees - p_fees
+                    
+                    total_collected = p_fees.sum()
+                    total_pending = r_fees.sum()
+                    paid_count = (r_fees <= 0).sum()
+                    unpaid_count = (r_fees > 0).sum()
+                    
+                    m1, m2, m3, m4 = st.columns(4)
+                    m1.metric("Paid Students", paid_count)
+                    m2.metric("Unpaid Students", unpaid_count)
+                    m3.metric("Total Collected", f"₹{total_collected}")
+                    m4.metric("Total Remaining", f"₹{total_pending}", delta_color="inverse")
+                    
+                    st.divider()
+                    st.write("### 📝 विद्यार्थ्यांनुसार फी तपशील")
+                    report_df = pd.DataFrame({
+                        'विद्यार्थ्याचे नाव': df['name'] if 'name' in df.columns else "N/A",
+                        'एकूण फी': t_fees,
+                        'भरलेली फी': p_fees,
+                        'शिल्लक फी': r_fees
+                    })
+                    st.table(report_df)
 
         elif admin_pwd:
             st.error("पासवर्ड चुकीचा आहे!")
