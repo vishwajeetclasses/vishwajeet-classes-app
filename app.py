@@ -12,7 +12,7 @@ def safe_int(val, default=0):
     try:
         if val == '' or val is None: 
             return default
-        return int(float(val))
+        return int(float(str(val).replace(',', '')))
     except:
         return default
 
@@ -38,6 +38,7 @@ def load_data():
     return df, workbook, sheet1
 
 def main():
+    # डेटा लोड करणे
     try:
         df, workbook, sheet1 = load_data()
     except Exception as e:
@@ -58,9 +59,9 @@ def main():
                 sid = st.text_input("विद्यार्थी ID")
                 pwd = st.text_input("पासवर्ड", type="password")
                 if st.button("लॉगिन"):
-                    if sid in data_dict and str(data_dict[sid].get("password")) == str(pwd):
+                    if str(sid) in data_dict and str(data_dict[str(sid)].get("password")) == str(pwd):
                         st.session_state["logged_in"] = True
-                        st.session_state["info"] = data_dict[sid]
+                        st.session_state["info"] = data_dict[str(sid)]
                         st.session_state["sid"] = sid
                         st.rerun()
                     else: st.error("चुकीचा ID किंवा पासवर्ड!")
@@ -87,7 +88,7 @@ def main():
 
             # --- परीक्षा निकाल विभाग ---
             st.divider()
-            st.subheader("🏆 माझे परीक्षेचे निकाल (Exam Results)")
+            st.subheader("🏆 माझे परीक्षेचे निकाल")
             try:
                 exam_sheet = workbook.worksheet("exam_results")
                 exam_df = pd.DataFrame(exam_sheet.get_all_records())
@@ -101,7 +102,6 @@ def main():
                         return f'color: {color}; font-weight: bold'
 
                     st.dataframe(my_exams[['exam_id', 'attempted', 'correct_ans', 'score', 'time_taken', 'Accuracy']].style.applymap(style_time, subset=['time_taken']), use_container_width=True)
-                    st.caption("🟢 हिरवा वेळ = ६ मिनिटांच्या आत | 🔴 लाल वेळ = ६ मिनिटांच्या नंतर")
                 else: st.info("अद्याप कोणताही निकाल उपलब्ध नाही.")
             except: st.warning("निकालाचा डेटा सापडला नाही.")
 
@@ -156,26 +156,34 @@ def main():
                     if st.form_submit_button("विद्यार्थी सेव्ह करा"):
                         if n_sid and n_name:
                             sheet1.append_row([n_sid, n_pwd, n_name, n_photo, n_addr, n_abacus, n_vedic, "0", n_total, n_paid, n_total-n_paid, "नवीन"])
-                            st.success("✅ नोंदणी यशस्वी!"); st.rerun()
+                            st.success(f"✅ {n_name} ची नोंदणी यशस्वी! डेटा रिफ्रेश होत आहे...")
+                            st.rerun() # नवीन डेटा लोड करण्यासाठी
 
             with tabs[1]:
                 st.subheader("क्लास हजेरी")
                 att_date = st.date_input("तारीख", datetime.now())
                 col_a, col_v = st.columns(2)
                 att_list = []
+                # Abacus List
                 with col_a:
-                    st.write("🧮 Abacus")
-                    for i, r in df[df['abacus_level']!='None'].iterrows():
+                    st.write("🧮 Abacus Class")
+                    ab_df = df[df['abacus_level']!='None']
+                    for i, r in ab_df.iterrows():
                         p = st.checkbox(f"{r['name']}", key=f"ab_{r['student_id']}")
                         att_list.append([r['student_id'], str(att_date), "Present" if p else "Absent", "Abacus"])
+                # Vedic List
                 with col_v:
-                    st.write("🕉️ Vedic")
-                    for i, r in df[df['vedic_level']!='None'].iterrows():
+                    st.write("🕉️ Vedic Math")
+                    vd_df = df[df['vedic_level']!='None']
+                    for i, r in vd_df.iterrows():
                         p = st.checkbox(f"{r['name']}", key=f"vd_{r['student_id']}")
                         att_list.append([r['student_id'], str(att_date), "Present" if p else "Absent", "Vedic"])
+                
                 if st.button("हजेरी सेव्ह करा"):
-                    workbook.worksheet("attendance_logs").append_rows(att_list)
-                    st.success("✅ हजेरी सेव्ह झाली!")
+                    if att_list:
+                        workbook.worksheet("attendance_logs").append_rows(att_list)
+                        st.success("✅ हजेरी यशस्वीरित्या सेव्ह झाली!")
+                    else: st.warning("विद्यार्थी यादी रिकामी आहे.")
 
             with tabs[2]:
                 st.subheader("सर्व विद्यार्थी माहिती")
@@ -183,40 +191,50 @@ def main():
 
             with tabs[3]:
                 st.subheader("फी अपडेट")
-                s_update = st.selectbox("विद्यार्थी", df['name'].tolist() if not df.empty else [])
-                u_row = df[df['name']==s_update].iloc[0]
-                new_t = st.number_input("Total Fees", value=safe_int(u_row['total_fees']))
-                new_p = st.number_input("Paid Fees", value=safe_int(u_row['paid_fees']))
-                if st.button("फी अपडेट करा"):
-                    cell = sheet1.find(str(u_row['student_id']))
-                    sheet1.update_cell(cell.row, 9, new_t)
-                    sheet1.update_cell(cell.row, 10, new_p)
-                    sheet1.update_cell(cell.row, 11, new_t-new_p)
-                    st.success("✅ फी अपडेट झाली!"); st.rerun()
+                if not df.empty:
+                    s_update = st.selectbox("विद्यार्थी निवडा", df['name'].tolist())
+                    u_row = df[df['name'] == s_update].iloc[0]
+                    new_t = st.number_input("Total Fees", value=safe_int(u_row['total_fees']))
+                    new_p = st.number_input("Paid Fees", value=safe_int(u_row['paid_fees']))
+                    if st.button("फी अपडेट करा"):
+                        cell = sheet1.find(str(u_row['student_id']))
+                        sheet1.update_cell(cell.row, 9, new_t)
+                        sheet1.update_cell(cell.row, 10, new_p)
+                        sheet1.update_cell(cell.row, 11, new_t-new_p)
+                        st.success("✅ फी अपडेट झाली!")
+                        st.rerun()
 
             with tabs[4]:
-                st.subheader("💰 फी रिपोर्ट (Analytics)")
+                st.subheader("💰 फी रिपोर्ट (Live Update)")
                 if not df.empty:
-                    t_f = df['total_fees'].apply(safe_int).sum()
-                    p_f = df['paid_fees'].apply(safe_int).sum()
-                    m1, m2, m3 = st.columns(3)
-                    m1.metric("एकूण येणे (Expected)", f"₹{t_f}")
-                    m2.metric("जमा फी (Collected)", f"₹{p_f}")
-                    m3.metric("बाकी फी (Pending)", f"₹{t_f - p_f}", delta=f"-₹{t_f-p_f}", delta_color="inverse")
+                    # डेटा क्लीनिंग आणि मॅपिंग
+                    report_df = df.copy()
+                    report_df['total_fees'] = report_df['total_fees'].apply(safe_int)
+                    report_df['paid_fees'] = report_df['paid_fees'].apply(safe_int)
+                    report_df['remaining'] = report_df['total_fees'] - report_df['paid_fees']
                     
-                    st.write("### 📝 विद्यार्थ्यांनुसार थकबाकी")
-                    report_df = pd.DataFrame({
-                        'नाव': df['name'],
-                        'एकूण फी': df['total_fees'],
-                        'भरलेली': df['paid_fees'],
-                        'बाकी': df['total_fees'].apply(safe_int) - df['paid_fees'].apply(safe_int)
-                    })
-                    st.table(report_df[report_df['बाकी'] > 0])
+                    t_f = report_df['total_fees'].sum()
+                    p_f = report_df['paid_fees'].sum()
+                    rem_f = report_df['remaining'].sum()
+                    
+                    m1, m2, m3 = st.columns(3)
+                    m1.metric("एकूण अपेक्षित फी", f"₹{t_f}")
+                    m2.metric("जमा झालेली फी", f"₹{p_f}")
+                    m3.metric("एकूण बाकी फी", f"₹{rem_f}", delta=f"-₹{rem_f}", delta_color="inverse")
+                    
+                    st.divider()
+                    st.write("### 📝 विद्यार्थ्यांनुसार थकबाकी यादी")
+                    # फक्त गरजेची माहिती दाखवणे
+                    display_report = report_df[['student_id', 'name', 'total_fees', 'paid_fees', 'remaining']].copy()
+                    display_report.columns = ['ID', 'नाव', 'एकूण फी', 'भरलेली', 'बाकी']
+                    st.dataframe(display_report.sort_values(by='बाकी', ascending=False), use_container_width=True)
+                else:
+                    st.warning("डेटा उपलब्ध नाही.")
 
             with tabs[5]:
                 st.subheader("🏆 परीक्षेचे मार्क भरा")
-                with st.form("mark_form"):
-                    m_sid = st.selectbox("विद्यार्थी ID", df['student_id'].tolist() if not df.empty else [])
+                with st.form("mark_form", clear_on_submit=True):
+                    m_sid = st.selectbox("विद्यार्थी निवडा", df['student_id'].tolist() if not df.empty else [])
                     m_id = st.text_input("पेपर क्रमांक/नाव", value="Exam-1")
                     c1, c2, c3 = st.columns(3)
                     m_att = c1.number_input("Attempted", min_value=0)
@@ -224,10 +242,12 @@ def main():
                     m_time = c3.number_input("वेळ (Min)", value=5.0, step=0.1)
                     m_score = st.number_input("स्कोर (/100)", min_value=0)
                     if st.form_submit_button("निकाल सेव्ह करा"):
-                        workbook.worksheet("exam_results").append_row([m_sid, m_id, m_att, m_corr, m_score, m_time, str(datetime.now().date())])
-                        st.success("✅ निकाल सेव्ह झाला!")
+                        try:
+                            workbook.worksheet("exam_results").append_row([m_sid, m_id, m_att, m_corr, m_score, m_time, str(datetime.now().date())])
+                            st.success("✅ निकाल सेव्ह झाला!")
+                        except: st.error("exam_results शीट तपासा!")
 
-        elif admin_pwd: st.error("चुकीचा पासवर्ड!")
+        elif admin_pwd: st.error("पासवर्ड चुकीचा आहे!")
 
 if __name__ == "__main__":
     main()
