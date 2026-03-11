@@ -50,51 +50,63 @@ def main():
     # --- विद्यार्थी लॉगिन विभाग ---
     if choice == "विद्यार्थी लॉगिन":
         st.header("🎓 विद्यार्थी पोर्टल")
-        if 'student_id' in df.columns:
-            data_dict = df.set_index('student_id').to_dict('index')
-            if "logged_in" not in st.session_state:
-                st.session_state["logged_in"] = False
+        
+        # Session State Initialise
+        if "logged_in" not in st.session_state:
+            st.session_state["logged_in"] = False
 
-            if not st.session_state["logged_in"]:
+        if not st.session_state["logged_in"]:
+            if 'student_id' in df.columns:
+                data_dict = df.set_index('student_id').to_dict('index')
                 sid = st.text_input("विद्यार्थी ID")
                 pwd = st.text_input("पासवर्ड", type="password")
                 if st.button("लॉगिन"):
                     if sid in data_dict and str(data_dict[sid].get("password")) == str(pwd):
                         st.session_state["logged_in"] = True
                         st.session_state["info"] = data_dict[sid]
-                        st.session_state["sid"] = sid # ID सेव्ह केला
+                        st.session_state["sid"] = sid  # महत्त्वाचे: लॉगिन झाल्यावर ID स्टोअर करणे
                         st.rerun()
                     else:
                         st.error("चुकीचा ID किंवा पासवर्ड!")
             else:
-                info = st.session_state["info"]
-                current_sid = st.session_state["sid"]
-                st.title(f"नमस्ते, {info.get('name', 'विद्यार्थी')}! 👋")
-                
-                col_img, col_info = st.columns([1, 3])
-                with col_img:
-                    photo_url = info.get('photo_url', "")
-                    try:
-                        if photo_url and str(photo_url).strip() != "":
-                            st.image(photo_url, width=150)
-                        else:
-                            st.image("https://via.placeholder.com/150", caption="फोटो उपलब्ध नाही", width=150)
-                    except Exception:
-                        st.image("https://via.placeholder.com/150", caption="फोटो लोड झाला नाही", width=150)
-                
-                with col_info:
-                    st.subheader("📊 माझी प्रगती")
-                    c1, c2 = st.columns(2)
-                    c1.metric("Abacus Level", info.get('abacus_level', 'N/A'))
-                    c2.metric("Vedic Math", info.get('vedic_level', 'N/A'))
+                st.error("शीटमध्ये 'student_id' कॉलम सापडला नाही!")
+        else:
+            # लॉगिन झालेला असतानाचा भाग
+            info = st.session_state.get("info", {})
+            current_sid = st.session_state.get("sid", "") # Safety Check: .get वापरल्याने एरर येत नाही
+            
+            if not current_sid:
+                st.session_state["logged_in"] = False
+                st.rerun()
 
-                # --- हजेरी विभाग (Student Side) ---
-                st.divider()
-                st.subheader("📅 माझी हजेरी (Attendance History)")
+            st.title(f"नमस्ते, {info.get('name', 'विद्यार्थी')}! 👋")
+            
+            col_img, col_info = st.columns([1, 3])
+            with col_img:
+                photo_url = info.get('photo_url', "")
                 try:
-                    att_sheet = workbook.worksheet("attendance_logs")
-                    att_data = pd.DataFrame(att_sheet.get_all_records())
-                    # कॉलमची नावं तुमच्या शीटनुसार असावीत: student_id, date, status
+                    if photo_url and str(photo_url).strip() != "":
+                        st.image(photo_url, width=150)
+                    else:
+                        st.image("https://via.placeholder.com/150", caption="फोटो उपलब्ध नाही", width=150)
+                except Exception:
+                    st.image("https://via.placeholder.com/150", caption="फोटो लोड झाला नाही", width=150)
+            
+            with col_info:
+                st.subheader("📊 माझी प्रगती")
+                c1, c2 = st.columns(2)
+                c1.metric("Abacus Level", info.get('abacus_level', 'N/A'))
+                c2.metric("Vedic Math", info.get('vedic_level', 'N/A'))
+
+            # --- हजेरी विभाग (Student Side) ---
+            st.divider()
+            st.subheader("📅 माझी हजेरी (Attendance History)")
+            try:
+                att_sheet = workbook.worksheet("attendance_logs")
+                att_data = pd.DataFrame(att_sheet.get_all_records())
+                
+                # 'student_id' कॉलम असल्याची खात्री करा
+                if 'student_id' in att_data.columns:
                     my_att = att_data[att_data['student_id'].astype(str) == str(current_sid)].copy()
                     
                     if not my_att.empty:
@@ -103,34 +115,36 @@ def main():
                             color = 'green' if val == 'Present' else 'red'
                             return f'color: {color}; font-weight: bold'
                         
-                        st.dataframe(my_att[['date', 'status', 'class_type']].style.applymap(color_status, subset=['status']), use_container_width=True)
+                        # फक्त उपलब्ध कॉलम्स दाखवा
+                        cols_to_show = [c for c in ['date', 'status', 'class_type'] if c in my_att.columns]
+                        st.dataframe(my_att[cols_to_show].style.applymap(color_status, subset=['status']), use_container_width=True)
                         
-                        # हजेरीची टक्केवारी
                         total_days = len(my_att)
                         present_days = len(my_att[my_att['status'] == 'Present'])
-                        perc = (present_days / total_days) * 100
+                        perc = (present_days / total_days) * 100 if total_days > 0 else 0
                         st.info(f"तुमची एकूण उपस्थिती: **{perc:.2f}%** ({present_days}/{total_days} दिवस)")
                     else:
                         st.info("अजून हजेरीची नोंद झालेली नाही.")
-                except Exception as e:
-                    st.warning("हजेरीचा डेटा लोड करता आला नाही.")
+                else:
+                    st.warning("हजेरी शीटमध्ये 'student_id' कॉलम नाही.")
+            except Exception as e:
+                st.warning("हजेरीचा डेटा लोड करताना समस्या आली.")
 
-                st.divider()
-                st.subheader("💰 फी तपशील")
-                with st.container(border=True):
-                    f1, f2, f3 = st.columns(3)
-                    t_val = safe_int(info.get('total_fees'), 6000)
-                    p_val = safe_int(info.get('paid_fees'), 0)
-                    r_val = t_val - p_val
-                    f1.metric("एकूण फी", f"₹{t_val}")
-                    f2.metric("भरलेली फी", f"₹{p_val}")
-                    f3.metric("बाकी फी", f"₹{r_val}", delta=f"-₹{r_val}" if r_val > 0 else "Clear", delta_color="inverse")
-                
-                if st.sidebar.button("Logout"):
-                    st.session_state["logged_in"] = False
-                    st.rerun()
-        else:
-            st.error("शीटमध्ये 'student_id' कॉलम सापडला नाही!")
+            st.divider()
+            st.subheader("💰 फी तपशील")
+            with st.container(border=True):
+                f1, f2, f3 = st.columns(3)
+                t_val = safe_int(info.get('total_fees'), 6000)
+                p_val = safe_int(info.get('paid_fees'), 0)
+                r_val = t_val - p_val
+                f1.metric("एकूण फी", f"₹{t_val}")
+                f2.metric("भरलेली फी", f"₹{p_val}")
+                f3.metric("बाकी फी", f"₹{r_val}", delta=f"-₹{r_val}" if r_val > 0 else "Clear", delta_color="inverse")
+            
+            if st.sidebar.button("Logout"):
+                st.session_state["logged_in"] = False
+                st.session_state["sid"] = ""
+                st.rerun()
 
     # --- ADMIN PANEL विभाग ---
     elif choice == "Admin Panel":
@@ -227,7 +241,7 @@ def main():
                     m2.metric("Unpaid Students", (r_fees > 0).sum())
                     m3.metric("Total Collected", f"₹{p_fees.sum()}")
                     m4.metric("Total Remaining", f"₹{r_fees.sum()}", delta_color="inverse")
-                    st.table(pd.DataFrame({'नाव': df['name'], 'एकूण': t_fees, 'भरलेली': p_fees, 'शillक': r_fees}))
+                    st.table(pd.DataFrame({'नाव': df['name'], 'एकूण': t_fees, 'भरलेली': p_fees, 'शिल्लक': r_fees}))
 
         elif admin_pwd: st.error("पासवर्ड चुकीचा आहे!")
 
