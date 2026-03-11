@@ -7,6 +7,23 @@ from datetime import datetime
 # १. पेज सेटअप
 st.set_page_config(page_title="Vishwajeet Classes Pro", layout="wide")
 
+# --- CUSTOM CSS (Branding आणि Header पूर्णपणे काढण्यासाठी) ---
+hide_st_style = """
+            <style>
+            #MainMenu {visibility: hidden;}
+            footer {visibility: hidden;}
+            header {visibility: hidden;}
+            #stDecoration {display:none !important;}
+            [data-testid="stHeader"] {display:none !important;}
+            /* मोबाईलवर वरची रिकामी जागा काढण्यासाठी */
+            .block-container {
+                padding-top: 1rem;
+                padding-bottom: 0rem;
+            }
+            </style>
+            """
+st.markdown(hide_st_style, unsafe_allow_html=True)
+
 # डेटा सुरक्षितपणे नंबरमध्ये बदलण्यासाठी फंक्शन
 def safe_int(val, default=0):
     try:
@@ -55,7 +72,8 @@ def main():
 
         if not st.session_state["logged_in"]:
             if 'student_id' in df.columns:
-                data_dict = df.set_index('student_id').to_dict('index')
+                # लॉगिनसाठी सोपे मॅपिंग
+                data_dict = df.set_index(df['student_id'].astype(str)).to_dict('index')
                 sid = st.text_input("विद्यार्थी ID")
                 pwd = st.text_input("पासवर्ड", type="password")
                 if st.button("लॉगिन"):
@@ -157,21 +175,19 @@ def main():
                         if n_sid and n_name:
                             sheet1.append_row([n_sid, n_pwd, n_name, n_photo, n_addr, n_abacus, n_vedic, "0", n_total, n_paid, n_total-n_paid, "नवीन"])
                             st.success(f"✅ {n_name} ची नोंदणी यशस्वी! डेटा रिफ्रेश होत आहे...")
-                            st.rerun() # नवीन डेटा लोड करण्यासाठी
+                            st.rerun()
 
             with tabs[1]:
                 st.subheader("क्लास हजेरी")
                 att_date = st.date_input("तारीख", datetime.now())
                 col_a, col_v = st.columns(2)
                 att_list = []
-                # Abacus List
                 with col_a:
                     st.write("🧮 Abacus Class")
                     ab_df = df[df['abacus_level']!='None']
                     for i, r in ab_df.iterrows():
                         p = st.checkbox(f"{r['name']}", key=f"ab_{r['student_id']}")
                         att_list.append([r['student_id'], str(att_date), "Present" if p else "Absent", "Abacus"])
-                # Vedic List
                 with col_v:
                     st.write("🕉️ Vedic Math")
                     vd_df = df[df['vedic_level']!='None']
@@ -207,7 +223,6 @@ def main():
             with tabs[4]:
                 st.subheader("💰 फी रिपोर्ट (Live Update)")
                 if not df.empty:
-                    # डेटा क्लीनिंग आणि मॅपिंग
                     report_df = df.copy()
                     report_df['total_fees'] = report_df['total_fees'].apply(safe_int)
                     report_df['paid_fees'] = report_df['paid_fees'].apply(safe_int)
@@ -219,17 +234,14 @@ def main():
                     
                     m1, m2, m3 = st.columns(3)
                     m1.metric("एकूण अपेक्षित फी", f"₹{t_f}")
-                    m2.metric("जमा झालेली फी", f"₹{p_f}")
+                    m2.metric("ज जमा झालेली फी", f"₹{p_f}")
                     m3.metric("एकूण बाकी फी", f"₹{rem_f}", delta=f"-₹{rem_f}", delta_color="inverse")
                     
                     st.divider()
                     st.write("### 📝 विद्यार्थ्यांनुसार थकबाकी यादी")
-                    # फक्त गरजेची माहिती दाखवणे
                     display_report = report_df[['student_id', 'name', 'total_fees', 'paid_fees', 'remaining']].copy()
                     display_report.columns = ['ID', 'नाव', 'एकूण फी', 'भरलेली', 'बाकी']
                     st.dataframe(display_report.sort_values(by='बाकी', ascending=False), use_container_width=True)
-                else:
-                    st.warning("डेटा उपलब्ध नाही.")
 
             with tabs[5]:
                 st.subheader("🏆 परीक्षेचे मार्क भरा")
