@@ -68,9 +68,20 @@ def main():
             else:
                 info = st.session_state["info"]
                 st.title(f"नमस्ते, {info.get('name', 'विद्यार्थी')}! 👋")
+                
                 col_img, col_info = st.columns([1, 3])
                 with col_img:
-                    st.image(info.get('photo_url', "https://via.placeholder.com/150"), width=150)
+                    # फोटो एरर फिक्स करण्यासाठी सुरक्षित कोड
+                    photo_url = info.get('photo_url', "")
+                    try:
+                        if photo_url and str(photo_url).strip() != "":
+                            st.image(photo_url, width=150)
+                        else:
+                            st.image("https://via.placeholder.com/150", caption="फोटो उपलब्ध नाही", width=150)
+                    except Exception:
+                        # जर लिंक चुकीची असेल तर क्रॅश न होता हे दिसेल
+                        st.image("https://via.placeholder.com/150", caption="फोटो लोड होऊ शकला नाही", width=150)
+                
                 with col_info:
                     st.subheader("📊 माझी प्रगती")
                     c1, c2 = st.columns(2)
@@ -91,6 +102,8 @@ def main():
                 if st.sidebar.button("Logout"):
                     st.session_state["logged_in"] = False
                     st.rerun()
+        else:
+            st.error("शीटमध्ये 'student_id' कॉलम सापडला नाही!")
 
     # --- ADMIN PANEL विभाग ---
     elif choice == "Admin Panel":
@@ -106,7 +119,7 @@ def main():
                     new_sid = st.text_input("विद्यार्थी ID")
                     new_name = st.text_input("पूर्ण नाव")
                     new_pwd = st.text_input("पासवर्ड", value="12345")
-                    new_photo = st.text_input("फोटो URL")
+                    new_photo = st.text_input("फोटो URL (रिकामी ठेवू शकता)")
                     new_addr = st.text_area("पत्ता")
                     c1, c2 = st.columns(2)
                     new_abacus = c1.selectbox("Abacus Level", ["Level 1", "Level 2", "Level 3", "Level 4", "Level 5", "None"])
@@ -131,12 +144,10 @@ def main():
                 att_date = st.date_input("तारीख निवडा", datetime.now())
                 date_str = str(att_date)
 
-                # विद्यार्थ्यांचे वर्गीकरण
                 abacus_students = df[df['abacus_level'] != "None"].copy()
                 vedic_students = df[df['vedic_level'] != "None"].copy()
 
                 att_records = []
-
                 col_a, col_v = st.columns(2)
                 
                 with col_a:
@@ -149,7 +160,6 @@ def main():
                 with col_v:
                     st.markdown("### 🕉️ Vedic Math Class")
                     for idx, row in vedic_students.iterrows():
-                        # जर विद्यार्थी दोन्हीकडे असेल तर वेगळी Key द्यावी लागते
                         is_present_v = st.checkbox(f"{row['name']} ({row['student_id']})", key=f"vd_{row['student_id']}")
                         status_v = "Present" if is_present_v else "Absent"
                         att_records.append([row['student_id'], date_str, status_v, "Vedic"])
@@ -158,7 +168,7 @@ def main():
                     try:
                         log_sheet = workbook.worksheet("attendance_logs")
                         log_sheet.append_rows(att_records)
-                        st.success(f"✅ {att_date} ची हजेरी यशस्वीरित्या सेव्ह झाली!")
+                        st.success(f"✅ {att_date} ची हजेरी सेव्ह झाली!")
                     except:
                         st.error("'attendance_logs' शीट सापडली नाही!")
 
@@ -168,7 +178,7 @@ def main():
 
             with tab4:
                 st.subheader("🔄 विद्यार्थ्याची फी अपडेट करा")
-                if not df.empty:
+                if not df.empty and 'name' in df.columns:
                     student_to_update = st.selectbox("विद्यार्थी निवडा", df['name'].tolist(), key="fee_update_select")
                     s_row = df[df['name'] == student_to_update].iloc[0]
                     with st.container(border=True):
