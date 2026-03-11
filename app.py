@@ -50,9 +50,7 @@ def main():
     # --- विद्यार्थी लॉगिन विभाग ---
     if choice == "विद्यार्थी लॉगिन":
         st.header("🎓 विद्यार्थी पोर्टल")
-        
-        if "logged_in" not in st.session_state:
-            st.session_state["logged_in"] = False
+        if "logged_in" not in st.session_state: st.session_state["logged_in"] = False
 
         if not st.session_state["logged_in"]:
             if 'student_id' in df.columns:
@@ -65,8 +63,7 @@ def main():
                         st.session_state["info"] = data_dict[sid]
                         st.session_state["sid"] = sid
                         st.rerun()
-                    else:
-                        st.error("चुकीचा ID किंवा पासवर्ड!")
+                    else: st.error("चुकीचा ID किंवा पासवर्ड!")
         else:
             info = st.session_state.get("info", {})
             current_sid = st.session_state.get("sid", "")
@@ -78,37 +75,35 @@ def main():
                 photo_url = info.get('photo_url', "")
                 try:
                     if photo_url: st.image(photo_url, width=150)
-                    else: st.image("https://via.placeholder.com/150", width=150)
+                    else: st.image("https://via.placeholder.com/150", caption="No Photo", width=150)
                 except: st.image("https://via.placeholder.com/150", width=150)
             
             with col_info:
-                st.subheader("📊 माझी प्रगती")
+                st.subheader("📝 वैयक्तिक माहिती")
+                st.write(f"**पत्ता:** {info.get('address', 'N/A')}")
                 c1, c2 = st.columns(2)
                 c1.metric("Abacus Level", info.get('abacus_level', 'N/A'))
                 c2.metric("Vedic Math", info.get('vedic_level', 'N/A'))
 
             # --- परीक्षा निकाल विभाग ---
             st.divider()
-            st.subheader("📝 माझे परीक्षेचे निकाल")
+            st.subheader("🏆 माझे परीक्षेचे निकाल (Exam Results)")
             try:
                 exam_sheet = workbook.worksheet("exam_results")
                 exam_df = pd.DataFrame(exam_sheet.get_all_records())
                 my_exams = exam_df[exam_df['student_id'].astype(str) == str(current_sid)].copy()
                 
                 if not my_exams.empty:
-                    # Accuracy Calculation
                     my_exams['Accuracy'] = (my_exams['correct_ans'] / my_exams['attempted'] * 100).round(1).astype(str) + '%'
                     
-                    # Display Table with Style
-                    def highlight_time(row):
-                        return ['color: green' if float(row.time_taken) <= 6.0 else 'color: red'] * len(row)
-                    
-                    st.table(my_exams[['exam_id', 'attempted', 'correct_ans', 'score', 'time_taken', 'Accuracy']])
-                    st.info("💡 टीप: ६ मिनिटांच्या आत पेपर सोडवणे अनिवार्य आहे.")
-                else:
-                    st.write("अद्याप कोणताही निकाल उपलब्ध नाही.")
-            except:
-                st.warning("निकालाचा डेटा उपलब्ध नाही (exam_results शीट तपासा).")
+                    def style_time(val):
+                        color = 'green' if float(val) <= 6.0 else 'red'
+                        return f'color: {color}; font-weight: bold'
+
+                    st.dataframe(my_exams[['exam_id', 'attempted', 'correct_ans', 'score', 'time_taken', 'Accuracy']].style.applymap(style_time, subset=['time_taken']), use_container_width=True)
+                    st.caption("🟢 हिरवा वेळ = ६ मिनिटांच्या आत | 🔴 लाल वेळ = ६ मिनिटांच्या नंतर")
+                else: st.info("अद्याप कोणताही निकाल उपलब्ध नाही.")
+            except: st.warning("निकालाचा डेटा सापडला नाही.")
 
             # --- हजेरी विभाग ---
             st.divider()
@@ -119,17 +114,19 @@ def main():
                 my_att = att_data[att_data['student_id'].astype(str) == str(current_sid)].copy()
                 if not my_att.empty:
                     st.dataframe(my_att[['date', 'status', 'class_type']], use_container_width=True)
-            except: st.write("हजेरीची नोंद नाही.")
+            except: st.write("हजेरी उपलब्ध नाही.")
 
             # --- फी विभाग ---
             st.divider()
             st.subheader("💰 फी तपशील")
-            f1, f2, f3 = st.columns(3)
-            t_val = safe_int(info.get('total_fees'), 6000)
-            p_val = safe_int(info.get('paid_fees'), 0)
-            f1.metric("एकूण फी", f"₹{t_val}")
-            f2.metric("भरलेली फी", f"₹{p_val}")
-            f3.metric("बाकी", f"₹{t_val - p_val}")
+            with st.container(border=True):
+                f1, f2, f3 = st.columns(3)
+                t_val = safe_int(info.get('total_fees'), 0)
+                p_val = safe_int(info.get('paid_fees'), 0)
+                r_val = t_val - p_val
+                f1.metric("एकूण फी", f"₹{t_val}")
+                f2.metric("भरलेली फी", f"₹{p_val}")
+                f3.metric("बाकी फी", f"₹{r_val}", delta=f"-₹{r_val}" if r_val > 0 else "Clear", delta_color="inverse")
 
             if st.sidebar.button("Logout"):
                 st.session_state["logged_in"] = False
@@ -141,57 +138,94 @@ def main():
         admin_pwd = st.sidebar.text_input("Admin Password", type="password")
         
         if admin_pwd == "VISHWA_ADMIN_123":
-            tabs = st.tabs(["➕ विद्यार्थी", "📝 हजेरी", "📊 यादी", "🔄 फी", "💰 रिपोर्ट", "🏆 मार्क भरा"])
+            tabs = st.tabs(["➕ नवीन विद्यार्थी", "📝 हजेरी भरा", "📊 विद्यार्थी यादी", "🔄 फी अपडेट", "💰 फी रिपोर्ट", "🏆 मार्क भरा"])
             
             with tabs[0]:
                 st.subheader("नवीन नोंदणी")
-                with st.form("add_student"):
-                    n_sid = st.text_input("विद्यार्थी ID")
-                    n_name = st.text_input("नाव")
-                    if st.form_submit_button("सेव्ह करा"):
-                        sheet1.append_row([n_sid, "12345", n_name, "", "", "None", "None", "0", 6000, 0, 6000, "नवीन"])
-                        st.success("विद्यार्थी जोडला!"); st.rerun()
+                with st.form("add_student_form", clear_on_submit=True):
+                    c1, c2 = st.columns(2)
+                    n_sid = c1.text_input("विद्यार्थी ID")
+                    n_name = c2.text_input("पूर्ण नाव")
+                    n_pwd = c1.text_input("पासवर्ड", value="12345")
+                    n_photo = c2.text_input("फोटो URL")
+                    n_addr = st.text_area("पत्ता")
+                    n_abacus = c1.selectbox("Abacus Level", ["Level 1", "Level 2", "Level 3", "Level 4", "Level 5", "None"])
+                    n_vedic = c2.selectbox("Vedic Math", ["Level 1", "Level 2", "Level 3", "None"])
+                    n_total = c1.number_input("एकूण फी", value=6000)
+                    n_paid = c2.number_input("भरलेली फी", value=0)
+                    if st.form_submit_button("विद्यार्थी सेव्ह करा"):
+                        if n_sid and n_name:
+                            sheet1.append_row([n_sid, n_pwd, n_name, n_photo, n_addr, n_abacus, n_vedic, "0", n_total, n_paid, n_total-n_paid, "नवीन"])
+                            st.success("✅ नोंदणी यशस्वी!"); st.rerun()
 
             with tabs[1]:
-                st.subheader("हजेरी भरा")
+                st.subheader("क्लास हजेरी")
                 att_date = st.date_input("तारीख", datetime.now())
-                att_records = []
-                for idx, row in df.iterrows():
-                    pres = st.checkbox(f"{row['name']} ({row['student_id']})", key=f"at_{row['student_id']}")
-                    att_records.append([row['student_id'], str(att_date), "Present" if pres else "Absent", "General"])
+                col_a, col_v = st.columns(2)
+                att_list = []
+                with col_a:
+                    st.write("🧮 Abacus")
+                    for i, r in df[df['abacus_level']!='None'].iterrows():
+                        p = st.checkbox(f"{r['name']}", key=f"ab_{r['student_id']}")
+                        att_list.append([r['student_id'], str(att_date), "Present" if p else "Absent", "Abacus"])
+                with col_v:
+                    st.write("🕉️ Vedic")
+                    for i, r in df[df['vedic_level']!='None'].iterrows():
+                        p = st.checkbox(f"{r['name']}", key=f"vd_{r['student_id']}")
+                        att_list.append([r['student_id'], str(att_date), "Present" if p else "Absent", "Vedic"])
                 if st.button("हजेरी सेव्ह करा"):
-                    workbook.worksheet("attendance_logs").append_rows(att_records)
-                    st.success("हजेरी यशस्वी!")
+                    workbook.worksheet("attendance_logs").append_rows(att_list)
+                    st.success("✅ हजेरी सेव्ह झाली!")
 
             with tabs[2]:
-                st.dataframe(df)
+                st.subheader("सर्व विद्यार्थी माहिती")
+                st.dataframe(df, use_container_width=True)
 
             with tabs[3]:
                 st.subheader("फी अपडेट")
-                s_name = st.selectbox("विद्यार्थी", df['name'].tolist() if not df.empty else [])
-                u_total = st.number_input("एकूण फी", value=6000)
-                u_paid = st.number_input("भरलेली फी", value=0)
-                if st.button("अपडेट करा"):
-                    cell = sheet1.find(s_name)
-                    sheet1.update_cell(cell.row, 9, u_total)
-                    sheet1.update_cell(cell.row, 10, u_paid)
-                    st.success("अपडेट झाले!"); st.rerun()
+                s_update = st.selectbox("विद्यार्थी", df['name'].tolist() if not df.empty else [])
+                u_row = df[df['name']==s_update].iloc[0]
+                new_t = st.number_input("Total Fees", value=safe_int(u_row['total_fees']))
+                new_p = st.number_input("Paid Fees", value=safe_int(u_row['paid_fees']))
+                if st.button("फी अपडेट करा"):
+                    cell = sheet1.find(str(u_row['student_id']))
+                    sheet1.update_cell(cell.row, 9, new_t)
+                    sheet1.update_cell(cell.row, 10, new_p)
+                    sheet1.update_cell(cell.row, 11, new_t-new_p)
+                    st.success("✅ फी अपडेट झाली!"); st.rerun()
 
             with tabs[4]:
-                st.write("फी रिपोर्ट लवकरच उपलब्ध होईल.")
+                st.subheader("💰 फी रिपोर्ट (Analytics)")
+                if not df.empty:
+                    t_f = df['total_fees'].apply(safe_int).sum()
+                    p_f = df['paid_fees'].apply(safe_int).sum()
+                    m1, m2, m3 = st.columns(3)
+                    m1.metric("एकूण येणे (Expected)", f"₹{t_f}")
+                    m2.metric("जमा फी (Collected)", f"₹{p_f}")
+                    m3.metric("बाकी फी (Pending)", f"₹{t_f - p_f}", delta=f"-₹{t_f-p_f}", delta_color="inverse")
+                    
+                    st.write("### 📝 विद्यार्थ्यांनुसार थकबाकी")
+                    report_df = pd.DataFrame({
+                        'नाव': df['name'],
+                        'एकूण फी': df['total_fees'],
+                        'भरलेली': df['paid_fees'],
+                        'बाकी': df['total_fees'].apply(safe_int) - df['paid_fees'].apply(safe_int)
+                    })
+                    st.table(report_df[report_df['बाकी'] > 0])
 
             with tabs[5]:
-                st.subheader("🏆 मार्क भरा")
-                with st.form("exam_form"):
-                    e_sid = st.selectbox("ID", df['student_id'].tolist() if not df.empty else [])
-                    e_id = st.text_input("पेपर नं.", value="Test 1")
-                    e_att = st.number_input("Attempted", value=0)
-                    e_corr = st.number_input("Correct", value=0)
-                    e_score = st.number_input("Score", value=0)
-                    e_time = st.number_input("Time (Min)", value=0.0, step=0.1)
+                st.subheader("🏆 परीक्षेचे मार्क भरा")
+                with st.form("mark_form"):
+                    m_sid = st.selectbox("विद्यार्थी ID", df['student_id'].tolist() if not df.empty else [])
+                    m_id = st.text_input("पेपर क्रमांक/नाव", value="Exam-1")
+                    c1, c2, c3 = st.columns(3)
+                    m_att = c1.number_input("Attempted", min_value=0)
+                    m_corr = c2.number_input("Correct", min_value=0)
+                    m_time = c3.number_input("वेळ (Min)", value=5.0, step=0.1)
+                    m_score = st.number_input("स्कोर (/100)", min_value=0)
                     if st.form_submit_button("निकाल सेव्ह करा"):
-                        workbook.worksheet("exam_results").append_row([e_sid, e_id, e_att, e_corr, e_score, e_time, str(datetime.now().date())])
-                        st.success("निकाल सेव्ह झाला!")
+                        workbook.worksheet("exam_results").append_row([m_sid, m_id, m_att, m_corr, m_score, m_time, str(datetime.now().date())])
+                        st.success("✅ निकाल सेव्ह झाला!")
 
         elif admin_pwd: st.error("चुकीचा पासवर्ड!")
 
